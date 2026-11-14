@@ -11,23 +11,31 @@ from PIL import Image
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     db_file = tmp_path / "test_deltachat.db"
+    auth_db_file = tmp_path / "test_auth_users.db"
     uploads_dir = tmp_path / "uploads"
     backups_dir = tmp_path / "backups"
+    users_backups_dir = backups_dir / "users"
     uploads_dir.mkdir()
     backups_dir.mkdir()
+    users_backups_dir.mkdir()
 
     monkeypatch.setenv("DELTACHAT_DB", str(db_file))
+    monkeypatch.setenv("DELTACHAT_AUTH_DB", str(auth_db_file))
     monkeypatch.setenv("DELTACHAT_UPLOADS", str(uploads_dir))
     monkeypatch.setenv("DELTACHAT_BACKUPS", str(backups_dir))
 
+    import auth_database
     import database
     import github_backup
     import image_service
     import main
 
+    auth_database.AUTH_DB_PATH = str(auth_db_file)
+    auth_database.LEGACY_CHAT_DB_PATH = str(db_file)
     database.DB_PATH = str(db_file)
     image_service.UPLOAD_DIR = uploads_dir
     github_backup.BACKUP_DIR = backups_dir
+    github_backup.USERS_BACKUP_DIR = users_backups_dir
 
     with TestClient(main.app) as c:
         yield c, uploads_dir, backups_dir

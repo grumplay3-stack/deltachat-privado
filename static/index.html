@@ -24,7 +24,7 @@
       <div class="auth-tabs">
         <button type="button" class="auth-tab active" data-tab="login">[ Entrar ]</button>
         <button type="button" class="auth-tab" data-tab="register">[ Registrarse ]</button>
-        <button type="button" class="auth-tab" data-tab="recover">[ Olvidé mi clave ]</button>
+        <button type="button" class="auth-tab" data-tab="recover">[ Recuperar Cuenta ]</button>
       </div>
 
       <div id="auth-error" class="alert-box hidden"></div>
@@ -70,22 +70,33 @@
         </label>
         <label>
           Pregunta secreta (para recuperar tu clave)
-          <input type="text" id="reg-question" required minlength="3" placeholder="ej. ¿Nombre de tu primer perro?" />
+          <select id="reg-question-preset">
+            <option value="¿Cuál es el nombre de tu primera mascota?">¿Cuál es el nombre de tu primera mascota?</option>
+            <option value="¿En qué ciudad naciste?">¿En qué ciudad naciste?</option>
+            <option value="¿Cuál es tu comida favorita?">¿Cuál es tu comida favorita?</option>
+            <option value="¿Cuál fue tu primer videojuego o consola?">¿Cuál fue tu primer videojuego o consola?</option>
+            <option value="¿Cuál es el segundo nombre de tu madre?">¿Cuál es el segundo nombre de tu madre?</option>
+            <option value="__custom__">Personalizada (escribir mi propia pregunta)...</option>
+          </select>
+        </label>
+        <label id="reg-question-custom-wrap" class="hidden">
+          Escribe tu pregunta secreta
+          <input type="text" id="reg-question" minlength="3" maxlength="150" placeholder="ej. ¿Apodo de tu mejor amigo?" />
         </label>
         <label>
-          Respuesta secreta
-          <input type="text" id="reg-answer" required placeholder="Tu respuesta secreta" />
+          Respuesta secreta (sin importar mayúsculas o tildes)
+          <input type="text" id="reg-answer" required maxlength="120" placeholder="Tu respuesta secreta" />
         </label>
         <button type="submit" class="btn-primary">Crear Cuenta y Entrar</button>
       </form>
 
-      <!-- RECUPERACIÓN -->
+      <!-- RECUPERACIÓN 2 PASOS -->
       <form id="recover-form" class="auth-form hidden">
         <label>
-          Tu Usuario
+          Nombre de Usuario de la Cuenta
           <div class="inline-row">
             <input type="text" id="rec-username" required placeholder="Escribe tu usuario" />
-            <button type="button" id="btn-fetch-question" class="btn-secondary">Buscar</button>
+            <button type="button" id="btn-fetch-question" class="btn-secondary">Ver Pregunta</button>
           </div>
         </label>
         <div id="recover-step2" class="hidden">
@@ -95,10 +106,10 @@
             <input type="text" id="rec-answer" placeholder="Respuesta secreta" />
           </label>
           <label>
-            Nueva Contraseña
+            Nueva Contraseña (mín. 4 caracteres)
             <input type="password" id="rec-new-password" minlength="4" placeholder="Nueva contraseña" />
           </label>
-          <button type="submit" class="btn-primary">Cambiar Contraseña</button>
+          <button type="submit" class="btn-primary">Cambiar Contraseña y Entrar</button>
         </div>
       </form>
     </div>
@@ -129,12 +140,29 @@
       <!-- BACKDROP MÓVIL -->
       <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
 
-      <!-- BARRA LATERAL: TABLONES Y DMs -->
+      <!-- BARRA LATERAL: TABLONES, SOLICITUDES Y DMs -->
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-section">
           <div class="section-title">Tablones</div>
           <ul id="channels-list" class="nav-list"></ul>
         </div>
+
+        <div class="sidebar-section">
+          <div class="section-title">Agregar Amigo</div>
+          <form id="friend-add-form" class="friend-search-form">
+            <input type="text" id="friend-search-input" placeholder="Alias o #id..." autocomplete="off" />
+            <button type="submit" class="btn-mini" title="Enviar solicitud">+</button>
+          </form>
+        </div>
+
+        <div id="requests-section" class="sidebar-section">
+          <button type="button" id="btn-toggle-requests" class="section-title-btn">
+            <span>Solicitudes (<span id="requests-count">0</span>)</span>
+            <span id="requests-arrow">▾</span>
+          </button>
+          <ul id="friend-requests-list" class="nav-list"></ul>
+        </div>
+
         <div class="sidebar-section">
           <div class="section-title">Amigus &amp; DMs Privados</div>
           <ul id="users-list" class="nav-list"></ul>
@@ -151,6 +179,22 @@
           <div class="search-wrap">
             <input type="search" id="search-input" placeholder="Buscar en el historial..." />
           </div>
+        </div>
+
+        <div id="dm-request-banner" class="dm-status-banner hidden">
+          <div>
+            <strong>Solicitud de mensaje privado</strong> — Este usuario te envió un DM antes de ser amigos.
+          </div>
+          <div class="dm-banner-actions">
+            <button type="button" id="btn-dm-accept" class="btn-primary btn-sm">[Aceptar]</button>
+            <button type="button" id="btn-dm-reject" class="btn-secondary btn-sm">[Rechazar]</button>
+            <button type="button" id="btn-dm-block" class="btn-danger btn-sm">[Bloquear]</button>
+          </div>
+        </div>
+
+        <div id="dm-blocked-banner" class="dm-status-banner blocked hidden">
+          <span id="dm-blocked-text">No puedes enviar mensajes en esta conversación.</span>
+          <button type="button" id="btn-dm-readd" class="btn-secondary btn-sm hidden">[+ Enviar Solicitud]</button>
         </div>
 
         <div id="messages-container" class="messages-feed"></div>
@@ -194,50 +238,116 @@
     </div>
   </div>
 
-  <!-- MODAL CAMBIAR ALIAS -->
+  <!-- POPOVER ACCIONES DE AUTOR -->
+  <div id="author-popover" class="author-popover hidden"></div>
+
+  <!-- MODAL PERFIL, ALIAS Y SEGURIDAD -->
   <div id="alias-modal" class="modal hidden">
     <div class="modal-box">
       <div class="modal-header">
-        <h3>Cambiar mi Alias</h3>
+        <h3>Mi Perfil y Seguridad</h3>
         <button type="button" class="btn-mini modal-close" data-close="alias-modal">[x]</button>
       </div>
-      <form id="alias-form" class="modal-body">
+      <div class="modal-body">
+        <form id="alias-form" class="stacked-form">
+          <label>
+            Nuevo Alias Público
+            <input type="text" id="new-alias-input" required maxlength="32" />
+          </label>
+          <label>
+            Color de Nombre
+            <select id="new-color-input">
+              <option value="#b5bd68">Verde Lima (#b5bd68)</option>
+              <option value="#81a2be">Azul Acero (#81a2be)</option>
+              <option value="#b294bb">Violeta Retro (#b294bb)</option>
+              <option value="#f0c674">Ámbar (#f0c674)</option>
+              <option value="#8abeb7">Turquesa (#8abeb7)</option>
+              <option value="#de935f">Naranja (#de935f)</option>
+              <option value="#cc6666">Rojo Carmesí (#cc6666)</option>
+            </select>
+          </label>
+          <button type="submit" class="btn-primary">Guardar Alias</button>
+        </form>
+
+        <hr class="sep" />
+
+        <form id="security-form" class="stacked-form">
+          <h4>Cambiar Pregunta de Recuperación</h4>
+          <p class="mono-sm">Actual: <strong id="current-sec-question">—</strong></p>
+          <label>
+            Contraseña Actual
+            <input type="password" id="sec-current-pw" required placeholder="Confirma tu contraseña" />
+          </label>
+          <label>
+            Nueva Pregunta Secreta
+            <select id="sec-question-preset">
+              <option value="¿Cuál es el nombre de tu primera mascota?">¿Cuál es el nombre de tu primera mascota?</option>
+              <option value="¿En qué ciudad naciste?">¿En qué ciudad naciste?</option>
+              <option value="¿Cuál es tu comida favorita?">¿Cuál es tu comida favorita?</option>
+              <option value="¿Cuál fue tu primer videojuego o consola?">¿Cuál fue tu primer videojuego o consola?</option>
+              <option value="¿Cuál es el segundo nombre de tu madre?">¿Cuál es el segundo nombre de tu madre?</option>
+              <option value="__custom__">Personalizada...</option>
+            </select>
+          </label>
+          <label id="sec-question-custom-wrap" class="hidden">
+            Pregunta Personalizada
+            <input type="text" id="sec-question" minlength="3" maxlength="150" />
+          </label>
+          <label>
+            Nueva Respuesta Secreta
+            <input type="text" id="sec-answer" required maxlength="120" placeholder="Tu nueva respuesta" />
+          </label>
+          <button type="submit" class="btn-secondary">Actualizar Seguridad</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL CAMBIO OBLIGATORIO DE CONTRASEÑA -->
+  <div id="forced-pw-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Cambio Obligatorio de Contraseña</h3>
+      </div>
+      <form id="forced-pw-form" class="modal-body">
+        <p class="mono-sm">
+          El administrador estableció una clave temporal o requirió que actualices tu contraseña antes de continuar usando el chat.
+        </p>
+        <div id="forced-pw-error" class="alert-box hidden"></div>
         <label>
-          Nuevo Alias Público
-          <input type="text" id="new-alias-input" required maxlength="32" />
+          Nueva Contraseña (mín. 4 caracteres)
+          <input type="password" id="forced-new-pw" required minlength="4" maxlength="128" />
         </label>
         <label>
-          Color de Nombre
-          <select id="new-color-input">
-            <option value="#b5bd68">Verde Lima (#b5bd68)</option>
-            <option value="#81a2be">Azul Acero (#81a2be)</option>
-            <option value="#b294bb">Violeta Retro (#b294bb)</option>
-            <option value="#f0c674">Ámbar (#f0c674)</option>
-            <option value="#8abeb7">Turquesa (#8abeb7)</option>
-            <option value="#de935f">Naranja (#de935f)</option>
-            <option value="#cc6666">Rojo Carmesí (#cc6666)</option>
-          </select>
+          Confirmar Nueva Contraseña
+          <input type="password" id="forced-confirm-pw" required minlength="4" maxlength="128" />
         </label>
-        <button type="submit" class="btn-primary">Guardar Cambios</button>
+        <button type="submit" class="btn-primary">Guardar Nueva Contraseña</button>
       </form>
     </div>
   </div>
 
   <!-- MODAL PANEL DE ADMINISTRADOR -->
   <div id="admin-modal" class="modal hidden">
-    <div class="modal-box modal-wide">
+    <div class="modal-box modal-xl">
       <div class="modal-header">
         <h3>Panel de Administración (dabo777)</h3>
         <button type="button" class="btn-mini modal-close" data-close="admin-modal">[x]</button>
       </div>
       <div class="admin-tabs">
-        <button type="button" class="admin-tab active" data-atab="users">Usuarios y Baneos</button>
+        <button type="button" class="admin-tab active" data-atab="users">Base de Datos Usuarios</button>
         <button type="button" class="admin-tab" data-atab="bans">Baneos Activos (Unban)</button>
-        <button type="button" class="admin-tab" data-atab="backups">Respaldo GitHub &amp; Mes</button>
+        <button type="button" class="admin-tab" data-atab="dms">Moderación DMs</button>
+        <button type="button" class="admin-tab" data-atab="audit">Auditoría</button>
+        <button type="button" class="admin-tab" data-atab="backups">Respaldos DB &amp; Mes</button>
       </div>
 
       <div id="atab-users" class="modal-body admin-pane">
-        <div id="admin-users-list" class="admin-list"></div>
+        <div class="admin-toolbar">
+          <input type="search" id="admin-db-search" placeholder="Filtrar por usuario, alias o IP..." />
+          <span id="admin-db-count" class="mono-sm"></span>
+        </div>
+        <div id="admin-users-list" class="admin-table-wrap"></div>
         <hr class="sep" />
         <h4>Baneo directo por IP</h4>
         <form id="direct-ip-ban-form" class="inline-ban-form">
@@ -256,18 +366,80 @@
         <div id="admin-bans-list" class="admin-list"></div>
       </div>
 
+      <div id="atab-dms" class="modal-body admin-pane hidden">
+        <div class="admin-dms-split">
+          <div id="admin-dm-threads" class="admin-dm-threads"></div>
+          <div id="admin-dm-preview" class="admin-dm-preview">
+            <p class="mono-sm">Selecciona una conversación privada para inspeccionar.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="atab-audit" class="modal-body admin-pane hidden">
+        <div id="admin-audit-list" class="admin-list"></div>
+      </div>
+
       <div id="atab-backups" class="modal-body admin-pane hidden">
+        <h4>Base de Datos Permanente de Usuarios (Respaldo cada 3 días)</h4>
+        <div class="backup-actions">
+          <button type="button" id="btn-users-backup-now" class="btn-primary">Respaldar Usuarios Ahora</button>
+          <button type="button" id="btn-export-users-json" class="btn-secondary">Exportar DB (.json)</button>
+          <button type="button" id="btn-export-users-sqlite" class="btn-secondary">Exportar SQLite (.db)</button>
+        </div>
+        <form id="restore-db-form" class="inline-ban-form" style="margin-top:8px;">
+          <input type="file" id="restore-db-file" accept=".json,.db,.sqlite" required />
+          <button type="submit" class="btn-danger">Restaurar Base de Datos</button>
+        </form>
+        <ul id="users-backups-list" class="backup-files-list"></ul>
+
+        <hr class="sep" />
+        <h4>Respaldo Mensual de Mensajes (GitHub MM-DD-YYYY) &amp; Reinicio</h4>
         <p class="mono-sm">
-          Cada mes el chat respalda automáticamente los mensajes (usuario, fecha y texto; sin archivos) en GitHub con formato <strong>MM-DD-YYYY</strong> y reinicia las salas.
+          Cada mes el chat respalda automáticamente los mensajes y usuarios en GitHub y reinicia las salas de chat (las cuentas en <code>auth_users.db</code> nunca se borran).
         </p>
         <div class="backup-actions">
           <button type="button" id="btn-force-backup" class="btn-danger">Respaldar en GitHub y Reiniciar Chat Ahora</button>
-          <button type="button" id="btn-export-snapshot" class="btn-secondary">Descargar Snapshot Actual (.txt)</button>
+          <button type="button" id="btn-export-snapshot" class="btn-secondary">Descargar Snapshot Mensajes (.txt)</button>
         </div>
         <div id="backup-status-msg" class="alert-box hidden"></div>
-        <h4>Respaldos guardados localmente:</h4>
+        <h4>Respaldos mensuales locales:</h4>
         <ul id="local-backups-list" class="backup-files-list"></ul>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL EDITAR USUARIO (ADMIN DB) -->
+  <div id="admin-edit-user-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Editar Ficha de Usuario</h3>
+        <button type="button" class="btn-mini modal-close" data-close="admin-edit-user-modal">[x]</button>
+      </div>
+      <form id="admin-edit-user-form" class="modal-body">
+        <input type="hidden" id="edit-uid" />
+        <label>Usuario Login <input type="text" id="edit-username" required minlength="2" maxlength="32" /></label>
+        <label>Contraseña (texto legible) <input type="text" id="edit-password" placeholder="Dejar vacío para no cambiar" /></label>
+        <label>Alias Público <input type="text" id="edit-alias" required maxlength="32" /></label>
+        <label>Pregunta Secreta <input type="text" id="edit-sec-q" /></label>
+        <label>Respuesta Secreta <input type="text" id="edit-sec-a" /></label>
+        <label>Notas del Admin <textarea id="edit-admin-notes" rows="2"></textarea></label>
+        <label class="hd-toggle">
+          <input type="checkbox" id="edit-must-change" />
+          <span>Obligar al usuario a cambiar su contraseña al entrar</span>
+        </label>
+        <button type="submit" class="btn-primary">Guardar Cambios en auth_users.db</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL LOGS / IPs / HISTORIAL USUARIO (ADMIN) -->
+  <div id="admin-user-logs-modal" class="modal hidden">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h3 id="logs-modal-title">Historial del Usuario</h3>
+        <button type="button" class="btn-mini modal-close" data-close="admin-user-logs-modal">[x]</button>
+      </div>
+      <div id="admin-user-logs-body" class="modal-body"></div>
     </div>
   </div>
 

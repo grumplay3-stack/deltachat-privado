@@ -1,20 +1,27 @@
 import base64
 import os
+import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
 import requests
 
+import auth_database
 import database
 import image_service
 
 BACKUP_DIR = Path(os.environ.get("DELTACHAT_BACKUPS", "backups"))
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+USERS_BACKUP_DIR = BACKUP_DIR / "users"
+USERS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+THREE_DAYS_SECONDS = 3 * 24 * 60 * 60
 
 
 def format_backup_text(date_str: str) -> str:
-    """Build a plain-text log of all messages (username, date, message text; no attachments)."""
+    """Build a plain-text log of all messages and DMs (username, date, message text; no attachments)."""
     data = database.fetch_all_messages_for_backup()
     lines = [
         "================================================================",
@@ -60,8 +67,8 @@ def format_backup_text(date_str: str) -> str:
     return "\n".join(lines)
 
 
-def push_to_github(filename: str, content_str: str, date_str: str) -> dict[str, Any]:
-    """Upload the backup file to the configured GitHub repository."""
+def push_to_github(repo_path: str, content_str: str, commit_message: str) -> dict[str, Any]:
+    """Upload a file to the configured GitHub repository under repo_path."""
     token = os.environ.get("GITHUB_TOKEN", "").strip()
     repo = os.environ.get("GITHUB_REPO", "").strip()
     if not token or not repo:
@@ -71,7 +78,7 @@ def push_to_github(filename: str, content_str: str, date_str: str) -> dict[str, 
             "error": "Variables GITHUB_TOKEN / GITHUB_REPO no configuradas.",
         }
 
-    api_url = f"https://api.github.com/repos/{repo}/contents/backups/{filename}"
+    api_url = f"https://api.github.com/repos/{repo}/contents/{repo_path}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
@@ -88,7 +95,7 @@ def push_to_github(filename: str, content_str: str, date_str: str) -> dict[str, 
 
     encoded = base64.b64encode(content_str.encode("utf-8")).decode("ascii")
     payload: dict[str, Any] = {
-        "message": f"DeltaChat respaldo mensual {date_str}",
+        "message": commit_message,
         "content": encoded,
     }
     if sha:
@@ -108,8 +115,40 @@ def push_to_github(filename: str, content_str: str, date_str: str) -> dict[str, 
         return {"pushed": False, "url": None, "error": str(exc)}
 
 
+def run_users_db_backup(force: bool = False) -> dict[str, Any]:
+    """Run local backup of auth_users.db every 3 days (or on demand)."""
+    USERS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    now_ts = time.time()
+    last_ts_str = auth_database.get_auth_setting("last_users_backup_ts")
+    if not force and last_ts_str:
+        try:
+            if (now_ts - float(last_ts_str)) < THREE_DAYS_SECONDS:
+                return {"executed": False, "reason": "Aún no se cumplen 3 días desde la última copia."}
+        except ValueError:
+            pass
+
+    date_str = datetime.now().strftime("%m-%d-%Y")
+    json_name = f"users_backup_{date_str}.json"
+    json_content = auth_database.export_users_db_json()
+    json_path = USERS_BACKUP_DIR / json_name
+    json_path.write_text(json_content, encoding="utf-8")
+
+    db_name = f"users_backup_{date_str}.db"
+    db_src = Path(auth_database.AUTH_DB_PATH)
+    if db_src.is_file():
+        shutil.copy2(db_src, USERS_BACKUP_DIR / db_name)
+
+    auth_database.set_auth_setting("last_users_backup_ts", str(now_ts))
+    return {
+        "executed": True,
+        "json_filename": json_name,
+        "db_filename": db_name,
+        "local_path": str(json_path),
+    }
+
+
 def run_backup_and_reset(force: bool = False) -> dict[str, Any]:
-    """Execute monthly backup (to local file + GitHub) and wipe/reset chat history."""
+    """Execute monthly backup (messages + users JSON to local + GitHub) and wipe chat history."""
     now = datetime.now()
     current_ym = now.strftime("%Y-%m")
     last_ym = database.get_setting("last_backup_ym")
@@ -124,9 +163,19 @@ def run_backup_and_reset(force: bool = False) -> dict[str, Any]:
     local_path = BACKUP_DIR / filename
     local_path.write_text(backup_content, encoding="utf-8")
 
-    gh_result = push_to_github(filename, backup_content, date_str)
+    gh_result = push_to_github(
+        f"backups/{filename}", backup_content, f"DeltaChat respaldo mensual {date_str}"
+    )
 
-    # Clear all messages and delete uploaded media files
+    # Also backup users JSON locally and to GitHub (auth_users.db is NEVER reset!)
+    users_res = run_users_db_backup(force=True)
+    users_json = auth_database.export_users_db_json()
+    gh_users_result = push_to_github(
+        f"backups/users/{users_res['json_filename']}",
+        users_json,
+        f"DeltaChat respaldo usuarios {date_str}",
+    )
+
     old_images = database.reset_all_messages_for_new_month(current_ym)
     for img_url in old_images:
         image_service.delete_upload_file(img_url)
@@ -136,9 +185,21 @@ def run_backup_and_reset(force: bool = False) -> dict[str, Any]:
         "filename": filename,
         "local_path": str(local_path),
         "github": gh_result,
+        "users_backup": users_res,
+        "github_users": gh_users_result,
     }
 
 
 def list_local_backups() -> list[str]:
     files = sorted(BACKUP_DIR.glob("backup_*.txt"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return [f.name for f in files]
+
+
+def list_users_backups() -> list[str]:
+    USERS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    files = sorted(
+        [p for p in USERS_BACKUP_DIR.iterdir() if p.is_file() and p.suffix in (".json", ".db")],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     return [f.name for f in files]

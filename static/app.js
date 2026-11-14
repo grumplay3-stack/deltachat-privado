@@ -3,15 +3,38 @@
   const COMPOSER_EMOJIS = ["😀", "😂", "😎", "🔥", "❤️", "👍", "👀", "💀", "👾", "🎉", "😭", "🤡"];
   const DAYS_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
+  // Isolated impersonation token support for ?imp=...
+  const urlParams = new URLSearchParams(window.location.search);
+  const impTokenFromUrl = urlParams.get("imp");
+  if (impTokenFromUrl) {
+    sessionStorage.setItem("dc_imp_token", impTokenFromUrl);
+    window.history.replaceState({}, "", window.location.pathname);
+  }
+  const IS_IMP_TAB = Boolean(sessionStorage.getItem("dc_imp_token"));
+
+  function saveSessionToken(tok) {
+    state.token = tok;
+    if (IS_IMP_TAB) {
+      sessionStorage.setItem("dc_imp_token", tok);
+    } else {
+      localStorage.setItem("dc_token", tok);
+    }
+  }
+
   const state = {
-    token: localStorage.getItem("dc_token") || "",
+    token: sessionStorage.getItem("dc_imp_token") || localStorage.getItem("dc_token") || "",
     user: null,
     channels: [],
     users: [],
+    adminUsers: [],
+    dmSummary: [],
+    friendsData: { friends: [], incoming_requests: [], outgoing_requests: [], blocked: [], blocked_by_ids: [] },
+    requestsCollapsed: false,
     onlineIds: new Set(),
     activeMode: "channel", // "channel" | "dm"
     activeChannelId: null,
     activeDmUserId: null,
+    activeDmMeta: null,
     messages: [],
     replyTo: null, // { id, alias, snippet }
     pendingFile: null,
@@ -145,7 +168,11 @@
   }
 
   function forceLogout(reasonMsg = "") {
-    localStorage.removeItem("dc_token");
+    if (IS_IMP_TAB) {
+      sessionStorage.removeItem("dc_imp_token");
+    } else {
+      localStorage.removeItem("dc_token");
+    }
     state.token = "";
     state.user = null;
     if (state.ws) {
@@ -153,12 +180,36 @@
       state.ws = null;
     }
     clearInterval(state.hdTimerInterval);
+    $("forced-pw-modal").classList.add("hidden");
     chatScreen.classList.add("hidden");
     authScreen.classList.remove("hidden");
     if (reasonMsg) {
       showAuthAlert(reasonMsg, false);
     }
   }
+
+  function resolveQuestionValue(selectId, customInputId) {
+    const sel = $(selectId);
+    if (!sel) return $(customInputId).value.trim();
+    return sel.value === "__custom__" ? $(customInputId).value.trim() : sel.value;
+  }
+
+  function bindQuestionPreset(selectId, customWrapId, customInputId) {
+    const sel = $(selectId);
+    const wrap = $(customWrapId);
+    const inp = $(customInputId);
+    if (!sel || !wrap || !inp) return;
+    const sync = () => {
+      const isCustom = sel.value === "__custom__";
+      wrap.classList.toggle("hidden", !isCustom);
+      inp.required = isCustom;
+    };
+    sel.addEventListener("change", sync);
+    sync();
+  }
+
+  bindQuestionPreset("reg-question-preset", "reg-question-custom-wrap", "reg-question");
+  bindQuestionPreset("sec-question-preset", "sec-question-custom-wrap", "sec-question");
 
   // --- AUTH TABS & FORMS ---
   document.querySelectorAll(".auth-tab").forEach((btn) => {
@@ -190,8 +241,7 @@
         showAuthAlert(data.detail || "No se pudo iniciar sesión.");
         return;
       }
-      state.token = data.token;
-      localStorage.setItem("dc_token", state.token);
+      saveSessionToken(data.token);
       await bootChat();
     } catch (err) {
       showAuthAlert("Error de conexión con el servidor.");
@@ -201,6 +251,11 @@
   $("register-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     clearAuthAlerts();
+    const secQuestion = resolveQuestionValue("reg-question-preset", "reg-question");
+    if (secQuestion.length < 3) {
+      showAuthAlert("La pregunta secreta debe tener al menos 3 caracteres.");
+      return;
+    }
     try {
       const resp = await fetch("/api/register", {
         method: "POST",
@@ -210,7 +265,7 @@
           alias: $("reg-alias").value.trim(),
           password: $("reg-password").value,
           avatar_color: $("reg-color").value,
-          security_question: $("reg-question").value.trim(),
+          security_question: secQuestion,
           security_answer: $("reg-answer").value.trim(),
         }),
       });
@@ -219,12 +274,15 @@
         showAuthAlert(data.detail || "No se pudo registrar.");
         return;
       }
-      state.token = data.token;
-      localStorage.setItem("dc_token", state.token);
+      saveSessionToken(data.token);
       await bootChat();
     } catch (err) {
       showAuthAlert("Error de conexión al registrar.");
     }
+  });
+
+  $("rec-username").addEventListener("input", () => {
+    $("recover-step2").classList.add("hidden");
   });
 
   $("btn-fetch-question").addEventListener("click", async () => {
@@ -240,6 +298,7 @@
       }
       $("rec-question-text").textContent = data.security_question;
       $("recover-step2").classList.remove("hidden");
+      $("rec-answer").focus();
     } catch {
       showAuthAlert("Error al buscar usuario.");
     }
@@ -248,6 +307,10 @@
   $("recover-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     clearAuthAlerts();
+    if ($("recover-step2").classList.contains("hidden")) {
+      $("btn-fetch-question").click();
+      return;
+    }
     try {
       const resp = await fetch("/api/recover-password", {
         method: "POST",
@@ -263,9 +326,14 @@
         showAuthAlert(data.detail || "Respuesta incorrecta.");
         return;
       }
-      showAuthAlert("Contraseña actualizada. Ya puedes iniciar sesión.", true);
       $("recover-step2").classList.add("hidden");
       $("recover-form").reset();
+      if (data.token) {
+        saveSessionToken(data.token);
+        await bootChat();
+      } else {
+        showAuthAlert("Contraseña actualizada. Ya puedes iniciar sesión.", true);
+      }
     } catch {
       showAuthAlert("Error al cambiar la contraseña.");
     }
@@ -286,7 +354,13 @@
         btnOpenAdmin.classList.add("hidden");
       }
 
-      await Promise.all([loadChannels(), loadUsers()]);
+      if (state.user.must_change_password) {
+        $("forced-pw-modal").classList.remove("hidden");
+      } else {
+        $("forced-pw-modal").classList.add("hidden");
+      }
+
+      await Promise.all([loadChannels(), loadUsers(), loadSidebarSocial()]);
       if (state.channels.length > 0) {
         await selectChannel(state.channels[0].id);
       }
@@ -311,6 +385,56 @@
     state.users = data.users || [];
     state.onlineIds = new Set(state.users.filter((u) => u.online).map((u) => u.id));
     renderNavigation();
+  }
+
+  async function loadSidebarSocial() {
+    try {
+      const [frResp, sumResp] = await Promise.all([apiFetch("/api/friends"), apiFetch("/api/dms/summary")]);
+      state.friendsData = await frResp.json();
+      const sumData = await sumResp.json();
+      state.dmSummary = sumData.conversations || [];
+      renderNavigation();
+    } catch {}
+  }
+
+  $("btn-toggle-requests").addEventListener("click", () => {
+    state.requestsCollapsed = !state.requestsCollapsed;
+    $("friend-requests-list").classList.toggle("hidden", state.requestsCollapsed);
+    $("requests-arrow").textContent = state.requestsCollapsed ? "▸" : "▾";
+  });
+
+  $("friend-add-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const q = $("friend-search-input").value.trim();
+    if (!q) return;
+    try {
+      await apiFetch("/api/friends/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      });
+      $("friend-search-input").value = "";
+      await loadSidebarSocial();
+      alert("Solicitud de amistad enviada.");
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  async function respondFriendAction(targetUserId, action) {
+    await apiFetch("/api/friends/respond", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target_user_id: targetUserId, action }),
+    });
+    await loadSidebarSocial();
+    if (state.activeMode === "dm" && state.activeDmUserId === targetUserId) {
+      if (action === "block" || action === "reject") {
+        if (state.channels.length > 0) await selectChannel(state.channels[0].id);
+      } else {
+        await loadCurrentMessages();
+      }
+    }
   }
 
   function renderNavigation() {
@@ -338,39 +462,164 @@
       channelsList.appendChild(li);
     });
 
-    // Sidebar users (DMs)
-    const isAdmin = state.user && state.user.role === "admin";
-    usersList.innerHTML = "";
-    state.users.forEach((u) => {
-      if (state.user && u.id === state.user.id) return;
-      const isOnline = state.onlineIds.has(u.id);
+    // Incoming friend requests
+    const reqList = $("friend-requests-list");
+    const incoming = state.friendsData.incoming_requests || [];
+    $("requests-count").textContent = String(incoming.length);
+    reqList.innerHTML = "";
+    incoming.forEach((r) => {
       const li = document.createElement("li");
-      li.className = "nav-item" + (state.activeMode === "dm" && state.activeDmUserId === u.id ? " active" : "");
-      const adminUserTag = isAdmin && u.username ? ` <span class="mono-sm">(@${escapeHtml(u.username)})</span>` : "";
+      li.className = "req-item";
       li.innerHTML = `
-        <div class="nav-item-main">
-          <span class="status-dot ${isOnline ? "online" : ""}"></span>
-          <span style="color:${escapeHtml(u.avatar_color)}">${escapeHtml(u.alias)}</span>${adminUserTag}
+        <div><strong style="color:${escapeHtml(r.avatar_color)}">${escapeHtml(r.alias)}</strong></div>
+        <div class="req-actions">
+          <button type="button" class="btn-primary btn-sm req-acc">✓ Aceptar</button>
+          <button type="button" class="btn-secondary btn-sm req-rej">✕</button>
+          <button type="button" class="btn-danger btn-sm req-blk">⛔</button>
         </div>
       `;
+      li.querySelector(".req-acc").addEventListener("click", () => respondFriendAction(r.user_id, "accept"));
+      li.querySelector(".req-rej").addEventListener("click", () => respondFriendAction(r.user_id, "reject"));
+      li.querySelector(".req-blk").addEventListener("click", () => respondFriendAction(r.user_id, "block"));
+      reqList.appendChild(li);
+    });
+
+    // Sidebar DMs sorted by most recent conversation + remaining users
+    const isAdmin = state.user && state.user.role === "admin";
+    const blockedIds = new Set([
+      ...(state.friendsData.blocked || []).map((b) => b.user_id),
+      ...(state.friendsData.blocked_by_ids || []),
+    ]);
+
+    const orderedEntries = [];
+    const seenIds = new Set();
+    (state.dmSummary || []).forEach((conv) => {
+      if (state.user && conv.user_id === state.user.id) return;
+      seenIds.add(conv.user_id);
+      orderedEntries.push({
+        user_id: conv.user_id,
+        alias: conv.alias,
+        username: conv.username,
+        avatar_color: conv.avatar_color,
+        online: state.onlineIds.has(conv.user_id) || conv.online,
+        last_message: conv.last_message || "",
+        unread_count: conv.unread_count || 0,
+        is_incoming_request: Boolean(conv.is_incoming_request),
+      });
+    });
+
+    // Include accepted friends without recent messages yet, plus other members
+    const friendsFirst = (state.friendsData.friends || []).map((f) => ({
+      id: f.user_id,
+      alias: f.alias,
+      avatar_color: f.avatar_color,
+      online: state.onlineIds.has(f.user_id),
+    }));
+    [...friendsFirst, ...state.users].forEach((u) => {
+      if (!u || (state.user && u.id === state.user.id) || seenIds.has(u.id) || blockedIds.has(u.id)) return;
+      seenIds.add(u.id);
+      orderedEntries.push({
+        user_id: u.id,
+        alias: u.alias,
+        username: u.username,
+        avatar_color: u.avatar_color,
+        online: state.onlineIds.has(u.id),
+        last_message: "",
+        unread_count: 0,
+        is_incoming_request: false,
+      });
+    });
+
+    usersList.innerHTML = "";
+    orderedEntries.forEach((entry) => {
+      const isOnline = state.onlineIds.has(entry.user_id) || entry.online;
+      const li = document.createElement("li");
+      li.className = "nav-item dm-row-btn" + (state.activeMode === "dm" && state.activeDmUserId === entry.user_id ? " active" : "");
+      const adminUserTag = isAdmin && entry.username ? ` <span class="mono-sm">(@${escapeHtml(entry.username)})</span>` : "";
+      const badge = entry.unread_count > 0 ? `<span class="unread-badge">${entry.unread_count}</span>` : "";
+      const reqPill = entry.is_incoming_request ? `<span class="req-pill">Solicitud</span>` : "";
+      const previewHtml = entry.last_message ? `<div class="dm-row-preview">${escapeHtml(entry.last_message)}</div>` : "";
+      li.innerHTML = `
+        <div class="dm-row-top">
+          <div class="nav-item-main">
+            <span class="status-dot ${isOnline ? "online" : ""}"></span>
+            <span style="color:${escapeHtml(entry.avatar_color)}">${escapeHtml(entry.alias)}</span>${adminUserTag}
+          </div>
+          <div style="display:flex;gap:4px;align-items:center;">${reqPill}${badge}</div>
+        </div>
+        ${previewHtml}
+      `;
       li.addEventListener("click", () => {
-        selectDm(u.id);
+        selectDm(entry.user_id);
         closeMobileSidebar();
       });
       usersList.appendChild(li);
     });
   }
 
+  function updateDmBanners() {
+    const reqBanner = $("dm-request-banner");
+    const blkBanner = $("dm-blocked-banner");
+    const msgInput = messageInput;
+    const btnSend = $("btn-send");
+
+    if (state.activeMode !== "dm" || !state.activeDmMeta) {
+      reqBanner.classList.add("hidden");
+      blkBanner.classList.add("hidden");
+      msgInput.disabled = false;
+      btnSend.disabled = false;
+      return;
+    }
+
+    const meta = state.activeDmMeta;
+    reqBanner.classList.toggle("hidden", !meta.is_incoming_request);
+    if (!meta.can_send && !meta.is_incoming_request) {
+      $("dm-blocked-text").textContent = meta.block_reason || "No puedes enviar mensajes en esta conversación.";
+      $("btn-dm-readd").classList.toggle("hidden", meta.friendship_status !== "unfriended");
+      blkBanner.classList.remove("hidden");
+    } else {
+      blkBanner.classList.add("hidden");
+    }
+
+    const lockComposer = !meta.can_send;
+    msgInput.disabled = lockComposer;
+    btnSend.disabled = lockComposer;
+  }
+
+  $("btn-dm-accept").addEventListener("click", () => {
+    if (state.activeDmUserId) respondFriendAction(state.activeDmUserId, "accept");
+  });
+  $("btn-dm-reject").addEventListener("click", () => {
+    if (state.activeDmUserId) respondFriendAction(state.activeDmUserId, "reject");
+  });
+  $("btn-dm-block").addEventListener("click", () => {
+    if (state.activeDmUserId && confirm("¿Bloquear a este usuario? No podrá volver a escribirte.")) {
+      respondFriendAction(state.activeDmUserId, "block");
+    }
+  });
+  $("btn-dm-readd").addEventListener("click", async () => {
+    if (!state.activeDmUserId) return;
+    await apiFetch("/api/friends/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target_user_id: state.activeDmUserId }),
+    });
+    await loadSidebarSocial();
+    await loadCurrentMessages();
+  });
+
   async function selectChannel(channelId) {
     state.activeMode = "channel";
     state.activeChannelId = channelId;
     state.activeDmUserId = null;
+    state.activeDmMeta = null;
     clearReply();
     const ch = state.channels.find((c) => c.id === channelId);
     if (ch) {
       activeRoomTitle.textContent = `/${ch.slug}/ - ${ch.name}`;
       activeRoomDesc.textContent = ch.description;
     }
+    updateDmBanners();
     renderNavigation();
     await loadCurrentMessages();
   }
@@ -380,7 +629,7 @@
     state.activeDmUserId = friendId;
     state.activeChannelId = null;
     clearReply();
-    const friend = state.users.find((u) => u.id === friendId);
+    const friend = state.users.find((u) => u.id === friendId) || state.dmSummary.find((d) => d.user_id === friendId);
     if (friend) {
       const extra = state.user.role === "admin" && friend.username ? ` (@${friend.username})` : "";
       activeRoomTitle.textContent = `DM Privado: ${friend.alias}${extra}`;
@@ -388,6 +637,7 @@
     }
     renderNavigation();
     await loadCurrentMessages();
+    await loadSidebarSocial();
   }
 
   async function loadCurrentMessages() {
@@ -404,6 +654,12 @@
     const resp = await apiFetch(url);
     const data = await resp.json();
     state.messages = data.messages || [];
+    if (state.activeMode === "dm" && data.friend) {
+      state.activeDmMeta = data.friend;
+    } else {
+      state.activeDmMeta = null;
+    }
+    updateDmBanners();
     renderMessages(true);
   }
 
@@ -491,9 +747,14 @@
       return `<button type="button" class="react-btn ${isActive}" data-emoji="${emoji}">${emoji}${count > 0 ? ` <span>${count}</span>` : ""}</button>`;
     }).join("");
 
+    const canClickAuthor = Boolean(m.user_id && state.user && m.user_id !== state.user.id);
+    const authorTagHtml = canClickAuthor
+      ? `<button type="button" class="post-alias post-author-btn" style="color:${escapeHtml(m.avatar_color)}" title="Opciones de amistad / DM">${escapeHtml(m.alias)}</button>`
+      : `<span class="post-alias" style="color:${escapeHtml(m.avatar_color)}">${escapeHtml(m.alias)}</span>`;
+
     article.innerHTML = `
       <div class="post-header">
-        <span class="post-alias" style="color:${escapeHtml(m.avatar_color)}">${escapeHtml(m.alias)}</span>
+        ${authorTagHtml}
         ${modBadge}
         ${adminUserInfo}
         <span class="post-date">${format4chanDate(m.created_at)}</span>
@@ -510,6 +771,13 @@
     `;
 
     // Event bindings inside post
+    const authorBtn = article.querySelector(".post-author-btn");
+    if (authorBtn) {
+      authorBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openAuthorPopover(e.currentTarget, m);
+      });
+    }
     const postNoEl = article.querySelector(".post-no");
     const quoteBtn = article.querySelector(".btn-quote");
     [postNoEl, quoteBtn].forEach((el) => {
@@ -557,6 +825,83 @@
 
     return article;
   }
+
+  function openAuthorPopover(anchorEl, msg) {
+    const pop = $("author-popover");
+    const uid = msg.user_id;
+    const isFriend = (state.friendsData.friends || []).some((f) => f.user_id === uid);
+    const isPendingOut = (state.friendsData.outgoing_requests || []).some((f) => f.user_id === uid);
+    const isAdminViewer = state.user && state.user.role === "admin";
+
+    pop.innerHTML = `
+      <div class="author-popover-title" style="color:${escapeHtml(msg.avatar_color)}">${escapeHtml(msg.alias)}</div>
+      <button type="button" id="pop-dm-btn">💬 Enviar DM</button>
+      ${
+        isFriend
+          ? `<button type="button" id="pop-unfriend-btn">✕ Quitar Amigo</button>`
+          : isPendingOut
+          ? `<button type="button" disabled>⏳ Solicitud enviada</button>`
+          : `<button type="button" id="pop-add-btn">+ Agregar Amigo</button>`
+      }
+      <button type="button" id="pop-block-btn" style="color:var(--warn-red)">⛔ Bloquear</button>
+      ${isAdminViewer ? `<button type="button" id="pop-admin-btn">🛠 Ver en Base Admin</button>` : ""}
+    `;
+
+    const rect = anchorEl.getBoundingClientRect();
+    pop.style.top = `${Math.min(window.innerHeight - 160, rect.bottom + 4)}px`;
+    pop.style.left = `${Math.min(window.innerWidth - 210, rect.left)}px`;
+    pop.classList.remove("hidden");
+
+    $("pop-dm-btn").addEventListener("click", () => {
+      pop.classList.add("hidden");
+      selectDm(uid);
+    });
+    const addBtn = $("pop-add-btn");
+    if (addBtn) {
+      addBtn.addEventListener("click", async () => {
+        pop.classList.add("hidden");
+        try {
+          await apiFetch("/api/friends/request", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ target_user_id: uid }),
+          });
+          await loadSidebarSocial();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    }
+    const unfBtn = $("pop-unfriend-btn");
+    if (unfBtn) {
+      unfBtn.addEventListener("click", () => {
+        pop.classList.add("hidden");
+        respondFriendAction(uid, "unfriend");
+      });
+    }
+    $("pop-block-btn").addEventListener("click", () => {
+      pop.classList.add("hidden");
+      if (confirm(`¿Bloquear a ${msg.alias}?`)) {
+        respondFriendAction(uid, "block");
+      }
+    });
+    const admBtn = $("pop-admin-btn");
+    if (admBtn) {
+      admBtn.addEventListener("click", async () => {
+        pop.classList.add("hidden");
+        $("admin-modal").classList.remove("hidden");
+        await refreshAdminData();
+        openAdminEditUser(uid);
+      });
+    }
+  }
+
+  document.addEventListener("click", (e) => {
+    const pop = $("author-popover");
+    if (pop && !pop.classList.contains("hidden") && !pop.contains(e.target) && !e.target.closest(".post-author-btn")) {
+      pop.classList.add("hidden");
+    }
+  });
 
   function scrollToPost(postId) {
     const target = document.getElementById(`post-${postId}`);
@@ -775,8 +1120,22 @@
         return;
       }
 
+      if (data.type === "error") {
+        alert(data.detail || "No se pudo completar la acción.");
+        return;
+      }
+
       if (data.type === "users_updated") {
         loadUsers();
+        loadSidebarSocial();
+        return;
+      }
+
+      if (data.type === "friends_updated") {
+        loadSidebarSocial();
+        if (state.activeMode === "dm") {
+          loadCurrentMessages();
+        }
         return;
       }
 
@@ -787,6 +1146,7 @@
           myAliasLabel.textContent = data.alias;
         }
         loadUsers();
+        loadSidebarSocial();
         loadCurrentMessages();
         return;
       }
@@ -822,7 +1182,9 @@
           if (state.messages.length === 1) messagesContainer.innerHTML = "";
           messagesContainer.appendChild(buildPostElement(dm));
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          apiFetch(`/api/dms/${otherId}/read`, { method: "POST" }).catch(() => {});
         }
+        loadSidebarSocial();
         return;
       }
 
@@ -902,10 +1264,11 @@
     }
   });
 
-  // --- ALIAS MODAL ---
+  // --- PERFIL, ALIAS, SEGURIDAD Y CAMBIO FORZADO DE CLAVE ---
   $("btn-open-alias").addEventListener("click", () => {
     $("new-alias-input").value = state.user.alias;
     $("new-color-input").value = state.user.avatar_color;
+    $("current-sec-question").textContent = state.user.security_question || "—";
     $("alias-modal").classList.remove("hidden");
   });
 
@@ -926,7 +1289,60 @@
     }
   });
 
-  // --- ADMIN PANEL ---
+  $("security-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const secQ = resolveQuestionValue("sec-question-preset", "sec-question");
+    if (secQ.length < 3) {
+      alert("La pregunta secreta debe tener al menos 3 caracteres.");
+      return;
+    }
+    try {
+      await apiFetch("/api/profile/security", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_password: $("sec-current-pw").value,
+          security_question: secQ,
+          security_answer: $("sec-answer").value.trim(),
+        }),
+      });
+      state.user.security_question = secQ;
+      $("current-sec-question").textContent = secQ;
+      $("security-form").reset();
+      bindQuestionPreset("sec-question-preset", "sec-question-custom-wrap", "sec-question");
+      alert("Pregunta y respuesta de recuperación actualizadas.");
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  $("forced-pw-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errBox = $("forced-pw-error");
+    errBox.classList.add("hidden");
+    const pw1 = $("forced-new-pw").value;
+    const pw2 = $("forced-confirm-pw").value;
+    if (pw1 !== pw2) {
+      errBox.textContent = "Las contraseñas no coinciden.";
+      errBox.classList.remove("hidden");
+      return;
+    }
+    try {
+      await apiFetch("/api/profile/change-forced-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_password: pw1 }),
+      });
+      state.user.must_change_password = false;
+      $("forced-pw-form").reset();
+      $("forced-pw-modal").classList.add("hidden");
+    } catch (err) {
+      errBox.textContent = err.message;
+      errBox.classList.remove("hidden");
+    }
+  });
+
+  // --- ADMIN PANEL (BASE DE DATOS, IMPERSONAR, AUDITORÍA, DMs, RESPALDOS) ---
   btnOpenAdmin.addEventListener("click", async () => {
     $("admin-modal").classList.remove("hidden");
     await refreshAdminData();
@@ -939,55 +1355,320 @@
       const target = btn.dataset.atab;
       document.querySelectorAll(".admin-pane").forEach((p) => p.classList.add("hidden"));
       $(`atab-${target}`).classList.remove("hidden");
+      if (target === "dms") loadAdminDmThreads();
+      if (target === "audit") loadAdminAudit();
+      if (target === "backups") {
+        loadAdminBackups();
+        loadAdminUsersBackups();
+      }
     });
   });
 
+  $("admin-db-search").addEventListener("input", () => {
+    renderAdminUsersTable();
+  });
+
   async function refreshAdminData() {
-    await Promise.all([loadAdminUsers(), loadAdminBans(), loadAdminBackups()]);
+    await Promise.all([loadAdminUsers(), loadAdminBans(), loadAdminBackups(), loadAdminUsersBackups()]);
   }
 
   async function loadAdminUsers() {
-    await loadUsers();
-    const list = $("admin-users-list");
+    const resp = await apiFetch("/api/admin/database/users");
+    const data = await resp.json();
+    state.adminUsers = data.users || [];
+    renderAdminUsersTable();
+  }
+
+  function renderAdminUsersTable() {
+    const q = ($("admin-db-search").value || "").trim().toLowerCase();
+    const filtered = state.adminUsers.filter((u) => {
+      if (!q) return true;
+      return (
+        (u.username || "").toLowerCase().includes(q) ||
+        (u.alias || "").toLowerCase().includes(q) ||
+        (u.last_ip || "").toLowerCase().includes(q)
+      );
+    });
+    $("admin-db-count").textContent = `${filtered.length} de ${state.adminUsers.length} cuentas`;
+    const wrap = $("admin-users-list");
+    wrap.innerHTML = "";
+
+    const table = document.createElement("table");
+    table.className = "admin-db-table";
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Usuario / Alias</th>
+          <th>Clave (Admin)</th>
+          <th>IP / Dispositivo</th>
+          <th>Notas / Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+    const tbody = table.querySelector("tbody");
+
+    filtered.forEach((u) => {
+      const tr = document.createElement("tr");
+      const isSelf = u.role === "admin";
+      tr.innerHTML = `
+        <td>#${u.id}</td>
+        <td>
+          <strong>@${escapeHtml(u.username)}</strong>
+          <div><span style="color:${escapeHtml(u.avatar_color)}">${escapeHtml(u.alias)}</span></div>
+          ${isSelf ? `<span class="post-admin-badge">## Admin</span>` : ""}
+        </td>
+        <td>
+          <span class="pw-pill">${escapeHtml(u.password || "")}</span>
+          ${u.must_change_password ? `<div class="mono-sm" style="color:var(--warn-amber)">Cambio obligatorio</div>` : ""}
+        </td>
+        <td>
+          <div>${escapeHtml(u.last_ip || "N/A")} ${u.online ? "🟢" : "⚫"}</div>
+          <div class="mono-sm">${escapeHtml(u.last_device || "—")}</div>
+        </td>
+        <td>
+          <div class="mono-sm">${escapeHtml(u.admin_notes || "Sin notas")}</div>
+        </td>
+        <td>
+          <div class="admin-row-actions">
+            <button type="button" class="btn-secondary btn-sm btn-edit-u">Editar</button>
+            <button type="button" class="btn-secondary btn-sm btn-logs-u">Logs/IPs</button>
+            ${!isSelf ? `<button type="button" class="btn-secondary btn-sm btn-tmp-u">Clave Temp</button>` : ""}
+            ${!isSelf ? `<button type="button" class="btn-primary btn-sm btn-imp-u">Entrar</button>` : ""}
+            ${!isSelf ? `<button type="button" class="btn-danger btn-sm btn-ban-u">Ban</button>` : ""}
+          </div>
+        </td>
+      `;
+
+      tr.querySelector(".btn-edit-u").addEventListener("click", () => openAdminEditUser(u.id));
+      tr.querySelector(".btn-logs-u").addEventListener("click", () => openUserLogs(u.id, u.username));
+
+      const tmpBtn = tr.querySelector(".btn-tmp-u");
+      if (tmpBtn) {
+        tmpBtn.addEventListener("click", async () => {
+          if (!confirm(`¿Generar contraseña temporal aleatoria para @${u.username}? Cerrará sus sesiones activas.`)) return;
+          const res = await apiFetch(`/api/admin/generate-temp-password/${u.id}`, { method: "POST" });
+          const info = await res.json();
+          window.prompt(`Clave temporal generada para @${info.username} (cópiala):`, info.temp_password);
+          await loadAdminUsers();
+        });
+      }
+
+      const impBtn = tr.querySelector(".btn-imp-u");
+      if (impBtn) {
+        impBtn.addEventListener("click", async () => {
+          const res = await apiFetch(`/api/admin/impersonate/${u.id}`, { method: "POST" });
+          const info = await res.json();
+          window.open(`/?imp=${encodeURIComponent(info.token)}`, "_blank");
+        });
+      }
+
+      const banBtn = tr.querySelector(".btn-ban-u");
+      if (banBtn) {
+        banBtn.addEventListener("click", () => openBanUserModal(u.id, u.alias, u.username, u.last_ip));
+      }
+
+      tbody.appendChild(tr);
+    });
+
+    wrap.appendChild(table);
+  }
+
+  function openAdminEditUser(userId) {
+    const u = state.adminUsers.find((x) => x.id === userId);
+    if (!u) return;
+    $("edit-uid").value = String(u.id);
+    $("edit-username").value = u.username || "";
+    $("edit-password").value = u.password || "";
+    $("edit-alias").value = u.alias || "";
+    $("edit-sec-q").value = u.security_question || "";
+    $("edit-sec-a").value = u.security_answer || "";
+    $("edit-admin-notes").value = u.admin_notes || "";
+    $("edit-must-change").checked = Boolean(u.must_change_password);
+    $("admin-edit-user-modal").classList.remove("hidden");
+  }
+
+  $("admin-edit-user-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const uid = parseInt($("edit-uid").value, 10);
+    const payload = {
+      username: $("edit-username").value.trim(),
+      alias: $("edit-alias").value.trim(),
+      security_question: $("edit-sec-q").value.trim(),
+      security_answer: $("edit-sec-a").value.trim(),
+      admin_notes: $("edit-admin-notes").value,
+      must_change_password: $("edit-must-change").checked,
+    };
+    const pwVal = $("edit-password").value;
+    if (pwVal) payload.password = pwVal;
+    try {
+      await apiFetch(`/api/admin/database/users/${uid}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      $("admin-edit-user-modal").classList.add("hidden");
+      await loadAdminUsers();
+      await loadUsers();
+      alert("Ficha actualizada en auth_users.db.");
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  async function openUserLogs(userId, username) {
+    $("logs-modal-title").textContent = `Logs, IPs e Historial de @${username}`;
+    const body = $("admin-user-logs-body");
+    body.innerHTML = `<p class="mono-sm">Cargando...</p>`;
+    $("admin-user-logs-modal").classList.remove("hidden");
+
+    const resp = await apiFetch(`/api/admin/database/users/${userId}/logs`);
+    const data = await resp.json();
+
+    const ipsHtml = (data.known_ips || []).map((ip) => `<li>${escapeHtml(ip.ip_address)} (visto ${format4chanDate(ip.last_seen)})</li>`).join("") || "<li>Sin IPs</li>";
+    const loginsHtml = (data.logins || []).slice(0, 20).map((l) => `
+      <tr>
+        <td>${format4chanDate(l.created_at)}</td>
+        <td>${escapeHtml(l.ip_address)}</td>
+        <td>${escapeHtml(l.device_summary || "")}</td>
+        <td>${l.success ? "✓ OK" : `✕ ${escapeHtml(l.failure_reason || "Fallo")}`}</td>
+      </tr>
+    `).join("");
+    const changesHtml = (data.changes || []).slice(0, 20).map((c) => `
+      <tr>
+        <td>${format4chanDate(c.created_at)}</td>
+        <td>${escapeHtml(c.field_name)}</td>
+        <td>${escapeHtml(c.old_value)} → ${escapeHtml(c.new_value)}</td>
+        <td>${escapeHtml(c.changed_by_role || "")}</td>
+      </tr>
+    `).join("");
+
+    body.innerHTML = `
+      <h4>IPs Conocidas</h4>
+      <ul class="backup-files-list">${ipsHtml}</ul>
+      <hr class="sep" />
+      <h4>Últimos Intentos de Login</h4>
+      <div class="admin-table-wrap"><table class="admin-db-table"><thead><tr><th>Fecha</th><th>IP</th><th>Dispositivo</th><th>Resultado</th></tr></thead><tbody>${loginsHtml}</tbody></table></div>
+      <hr class="sep" />
+      <h4>Historial de Cambios</h4>
+      <div class="admin-table-wrap"><table class="admin-db-table"><thead><tr><th>Fecha</th><th>Campo</th><th>Cambio</th><th>Actor</th></tr></thead><tbody>${changesHtml}</tbody></table></div>
+    `;
+  }
+
+  async function loadAdminDmThreads() {
+    const resp = await apiFetch("/api/admin/dms/inspect");
+    const data = await resp.json();
+    const list = $("admin-dm-threads");
+    const preview = $("admin-dm-preview");
     list.innerHTML = "";
-    state.users.forEach((u) => {
+    const threads = data.threads || [];
+    if (threads.length === 0) {
+      list.innerHTML = `<p class="mono-sm">No hay mensajes privados registrados.</p>`;
+      return;
+    }
+    threads.forEach((t) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "admin-dm-thread-btn";
+      btn.innerHTML = `
+        <strong>${escapeHtml(t.user_a_alias)} (@${escapeHtml(t.user_a_username)}) ↔ ${escapeHtml(t.user_b_alias)} (@${escapeHtml(t.user_b_username)})</strong>
+        <div class="mono-sm">${t.message_count} msgs · ${escapeHtml((t.last_message || "").slice(0, 40))}</div>
+      `;
+      btn.addEventListener("click", async () => {
+        list.querySelectorAll(".admin-dm-thread-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const r = await apiFetch(`/api/admin/dms/inspect/${t.user_a_id}/${t.user_b_id}`);
+        const d = await r.json();
+        preview.innerHTML = (d.messages || []).map((m) => `
+          <div style="margin-bottom:6px;border-bottom:1px solid var(--border-color);padding-bottom:4px;">
+            <span class="mono-sm">[${format4chanDate(m.created_at)}]</span>
+            <strong style="color:${escapeHtml(m.avatar_color)}">${escapeHtml(m.alias)}</strong>:
+            <span>${escapeHtml(m.content || (m.image_name ? `[Imagen: ${m.image_name}]` : ""))}</span>
+          </div>
+        `).join("") || `<p class="mono-sm">Sin mensajes.</p>`;
+      });
+      list.appendChild(btn);
+    });
+  }
+
+  async function loadAdminAudit() {
+    const resp = await apiFetch("/api/admin/audit-logs");
+    const data = await resp.json();
+    const list = $("admin-audit-list");
+    list.innerHTML = "";
+    const logs = data.logs || [];
+    if (logs.length === 0) {
+      list.innerHTML = `<p class="mono-sm">Sin eventos de auditoría todavía.</p>`;
+      return;
+    }
+    logs.forEach((l) => {
       const row = document.createElement("div");
       row.className = "admin-row";
-      const isSelf = u.role === "admin";
       row.innerHTML = `
         <div>
-          <strong style="color:${escapeHtml(u.avatar_color)}">${escapeHtml(u.alias)}</strong>
-          <span class="mono-sm">(@${escapeHtml(u.username || "")})</span>
-          ${isSelf ? `<span class="post-admin-badge">## Admin</span>` : ""}
-          <div class="mono-sm">IP: ${escapeHtml(u.last_ip || "N/A")} · ${u.online ? "🟢 En línea" : "⚫ Offline"}</div>
+          <strong>[${escapeHtml(l.event_type)}]</strong> @${escapeHtml(l.username || "")}
+          <div class="mono-sm">${escapeHtml(l.details || "")}</div>
         </div>
-        <div class="admin-row-actions">
-          ${!isSelf ? `<button type="button" class="btn-danger btn-ban-user">Ban / Suspender</button>` : ""}
-          ${!isSelf ? `<button type="button" class="btn-secondary btn-reset-pw">Cambiar Clave</button>` : ""}
-        </div>
+        <span class="mono-sm">${format4chanDate(l.created_at)}</span>
       `;
-      const banBtn = row.querySelector(".btn-ban-user");
-      if (banBtn) {
-        banBtn.addEventListener("click", () => {
-          openBanUserModal(u.id, u.alias, u.username, u.last_ip);
-        });
-      }
-      const pwBtn = row.querySelector(".btn-reset-pw");
-      if (pwBtn) {
-        pwBtn.addEventListener("click", async () => {
-          const newPw = prompt(`Nueva contraseña para ${u.alias} (@${u.username}):`);
-          if (!newPw || newPw.length < 4) return;
-          await apiFetch("/api/admin/reset-password", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: u.id, new_password: newPw }),
-          });
-          alert("Contraseña actualizada.");
-        });
-      }
       list.appendChild(row);
     });
   }
+
+  async function loadAdminUsersBackups() {
+    const resp = await apiFetch("/api/admin/database/backups");
+    const data = await resp.json();
+    const ul = $("users-backups-list");
+    ul.innerHTML = "";
+    const files = data.files || [];
+    if (files.length === 0) {
+      ul.innerHTML = `<li class="mono-sm">Aún no hay respaldos de usuarios (cada 3 días).</li>`;
+      return;
+    }
+    files.forEach((fname) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span>${escapeHtml(fname)}</span><button type="button" class="btn-secondary btn-sm">Descargar</button>`;
+      li.querySelector("button").addEventListener("click", () => {
+        downloadWithAuth(`/api/admin/database/backups/${encodeURIComponent(fname)}`, fname);
+      });
+      ul.appendChild(li);
+    });
+  }
+
+  $("btn-users-backup-now").addEventListener("click", async () => {
+    await apiFetch("/api/admin/database/backup-now", { method: "POST" });
+    await loadAdminUsersBackups();
+    alert("Respaldo de auth_users.db creado.");
+  });
+
+  $("btn-export-users-json").addEventListener("click", () => {
+    downloadWithAuth("/api/admin/database/export?format=json", "auth_users_export.json");
+  });
+
+  $("btn-export-users-sqlite").addEventListener("click", () => {
+    downloadWithAuth("/api/admin/database/export?format=db", "auth_users_export.db");
+  });
+
+  $("restore-db-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const file = $("restore-db-file").files[0];
+    if (!file) return;
+    if (!confirm(`¿Restaurar la base de datos de usuarios desde "${file.name}"? Sobrescribirá los registros actuales.`)) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const resp = await apiFetch("/api/admin/database/restore", { method: "POST", body: fd });
+      const data = await resp.json();
+      $("restore-db-form").reset();
+      await loadAdminUsers();
+      await loadUsers();
+      alert(`Base de datos restaurada (${data.restored_users} usuarios).`);
+    } catch (err) {
+      alert(err.message);
+    }
+  });
 
   async function loadAdminBans() {
     const resp = await apiFetch("/api/admin/bans");

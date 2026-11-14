@@ -19,10 +19,11 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import auth_database
 import database
 import github_backup
 import image_service
@@ -40,6 +41,10 @@ def get_client_ip(conn: Request | WebSocket) -> str:
     return "unknown"
 
 
+def get_user_agent(conn: Request | WebSocket) -> str:
+    return conn.headers.get("user-agent", "")
+
+
 def format_ban_error(ban: dict[str, Any]) -> str:
     reason = ban.get("reason") or "Sin motivo especificado"
     if ban["ban_type"] == "permaban":
@@ -53,7 +58,6 @@ class ConnectionManager:
     """Manages active WebSocket connections, presence, and personalized broadcasts."""
 
     def __init__(self) -> None:
-        # list of dicts: {"ws": WebSocket, "user_id": int, "role": str, "alias": str, "ip": str}
         self.connections: list[dict[str, Any]] = []
 
     def online_user_ids(self) -> set[int]:
@@ -69,6 +73,7 @@ class ConnectionManager:
                 "role": user["role"],
                 "alias": user["alias"],
                 "ip": ip,
+                "is_impersonated": bool(user.get("is_impersonated")),
             }
         )
         return not was_online
@@ -86,6 +91,17 @@ class ConnectionManager:
             return removed
         return None
 
+    async def send_to_user(self, user_id: int, payload: dict[str, Any]) -> None:
+        dead: list[WebSocket] = []
+        for c in list(self.connections):
+            if c["user_id"] == user_id:
+                try:
+                    await c["ws"].send_json(payload)
+                except Exception:
+                    dead.append(c["ws"])
+        for d in dead:
+            self.disconnect(d)
+
     async def broadcast_json(self, payload: dict[str, Any]) -> None:
         dead: list[WebSocket] = []
         for c in list(self.connections):
@@ -97,7 +113,6 @@ class ConnectionManager:
             self.disconnect(d)
 
     async def broadcast_channel_message(self, msg_id: int) -> None:
-        # Prepare both admin and member views once
         admin_msg = database.get_channel_message_by_id(msg_id, viewer_id=0, for_admin=True)
         member_msg = database.get_channel_message_by_id(msg_id, viewer_id=0, for_admin=False)
         if not admin_msg or not member_msg:
@@ -132,7 +147,9 @@ class ConnectionManager:
         online_ids = list(self.online_user_ids())
         await self.broadcast_json({"type": "presence", "online_user_ids": online_ids})
 
-    async def kick_banned_target(self, target_user_id: Optional[int], ip_address: Optional[str], message: str) -> None:
+    async def kick_banned_target(
+        self, target_user_id: Optional[int], ip_address: Optional[str], message: str
+    ) -> None:
         for c in list(self.connections):
             match_user = target_user_id is not None and c["user_id"] == target_user_id
             match_ip = ip_address and c["ip"] == ip_address
@@ -165,18 +182,15 @@ async def hd_cleanup_loop() -> None:
                 )
             for dm_item in expired["dms"]:
                 image_service.delete_upload_file(dm_item["image_url"])
-                for c in list(manager.connections):
-                    if c["user_id"] in (dm_item["sender_id"], dm_item["receiver_id"]):
-                        try:
-                            await c["ws"].send_json(
-                                {
-                                    "type": "hd_expired",
-                                    "target_type": "dm",
-                                    "id": dm_item["id"],
-                                }
-                            )
-                        except Exception:
-                            pass
+                for uid in (dm_item["sender_id"], dm_item["receiver_id"]):
+                    await manager.send_to_user(
+                        uid,
+                        {
+                            "type": "hd_expired",
+                            "target_type": "dm",
+                            "id": dm_item["id"],
+                        },
+                    )
         except Exception as exc:
             print(f"[HD Cleanup Error] {exc}")
         await asyncio.sleep(15)
@@ -189,30 +203,39 @@ async def monthly_backup_loop() -> None:
             result = github_backup.run_backup_and_reset(force=False)
             if result.get("executed"):
                 await manager.broadcast_json(
-                    {
-                        "type": "chat_reset",
-                        "filename": result["filename"],
-                    }
+                    {"type": "chat_reset", "filename": result["filename"]}
                 )
         except Exception as exc:
             print(f"[Monthly Backup Error] {exc}")
         await asyncio.sleep(3600)
 
 
+async def users_backup_loop() -> None:
+    """Check every 6 hours if 3 days have elapsed since the last auth_users.db backup."""
+    while True:
+        try:
+            github_backup.run_users_db_backup(force=False)
+        except Exception as exc:
+            print(f"[Users Backup Error] {exc}")
+        await asyncio.sleep(6 * 3600)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.init_db()
-    # Run initial monthly check on startup
     try:
+        github_backup.run_users_db_backup(force=False)
         github_backup.run_backup_and_reset(force=False)
     except Exception as exc:
         print(f"[Startup Backup Check Error] {exc}")
 
     t1 = asyncio.create_task(hd_cleanup_loop())
     t2 = asyncio.create_task(monthly_backup_loop())
+    t3 = asyncio.create_task(users_backup_loop())
     yield
     t1.cancel()
     t2.cancel()
+    t3.cancel()
 
 
 app = FastAPI(title="DeltaChat", lifespan=lifespan)
@@ -224,7 +247,7 @@ class RegisterRequest(BaseModel):
     username: str = Field(min_length=2, max_length=32)
     alias: str = Field(default="", max_length=32)
     password: str = Field(min_length=4, max_length=128)
-    security_question: str = Field(min_length=3, max_length=120)
+    security_question: str = Field(min_length=3, max_length=150)
     security_answer: str = Field(min_length=1, max_length=120)
     avatar_color: str = Field(default="#b5bd68")
 
@@ -245,6 +268,28 @@ class AliasUpdateRequest(BaseModel):
     avatar_color: Optional[str] = None
 
 
+class SecurityUpdateRequest(BaseModel):
+    current_password: str
+    security_question: str = Field(min_length=3, max_length=150)
+    security_answer: str = Field(min_length=1, max_length=120)
+
+
+class ForcedPasswordChangeRequest(BaseModel):
+    new_password: str = Field(min_length=4, max_length=128)
+
+
+class AdminEditUserRequest(BaseModel):
+    username: Optional[str] = Field(default=None, min_length=2, max_length=32)
+    password: Optional[str] = Field(default=None, max_length=128)
+    alias: Optional[str] = Field(default=None, max_length=32)
+    avatar_color: Optional[str] = None
+    role: Optional[str] = None
+    security_question: Optional[str] = None
+    security_answer: Optional[str] = None
+    admin_notes: Optional[str] = None
+    must_change_password: Optional[bool] = None
+
+
 class BanCreateRequest(BaseModel):
     target_user_id: Optional[int] = None
     ip_address: Optional[str] = None
@@ -253,9 +298,14 @@ class BanCreateRequest(BaseModel):
     duration_minutes: Optional[int] = None
 
 
-class AdminResetPasswordRequest(BaseModel):
-    user_id: int
-    new_password: str = Field(min_length=4, max_length=128)
+class FriendRequestCreate(BaseModel):
+    target_user_id: Optional[int] = None
+    query: Optional[str] = None
+
+
+class FriendRespondRequest(BaseModel):
+    target_user_id: int
+    action: str = Field(pattern="^(accept|reject|block|unfriend|unblock)$")
 
 
 # --- AUTH DEPENDENCIES ---
@@ -269,16 +319,17 @@ async def get_current_user(
         token = authorization.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(status_code=401, detail="Sesión no iniciada.")
-    user = database.get_user_by_token(token)
+    user = auth_database.get_user_by_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Sesión inválida o expirada.")
 
     ip = get_client_ip(request)
-    ban = database.check_active_ban(user_id=user["id"], ip_address=ip)
+    ban = auth_database.check_active_ban(user_id=user["id"], ip_address=ip)
     if ban:
         raise HTTPException(status_code=403, detail=format_ban_error(ban))
 
-    database.update_user_ip(user["id"], ip)
+    if not user.get("is_impersonated"):
+        auth_database.update_user_ip(user["id"], ip, get_user_agent(request))
     user["_token"] = token
     user["_ip"] = ip
     return user
@@ -295,15 +346,16 @@ async def require_admin(user: dict[str, Any] = Depends(get_current_user)) -> dic
 @app.post("/api/register")
 async def register(payload: RegisterRequest, request: Request):
     ip = get_client_ip(request)
-    ban = database.check_active_ban(ip_address=ip)
+    ua = get_user_agent(request)
+    ban = auth_database.check_active_ban(ip_address=ip)
     if ban:
         raise HTTPException(status_code=403, detail=format_ban_error(ban))
 
-    if payload.username.strip().lower() == database.ADMIN_USERNAME.lower():
+    if payload.username.strip().lower() == auth_database.ADMIN_USERNAME.lower():
         raise HTTPException(status_code=409, detail="Ese nombre de usuario está reservado.")
 
     try:
-        user = database.create_user(
+        user = auth_database.create_user(
             username=payload.username,
             alias=payload.alias,
             password=payload.password,
@@ -311,13 +363,14 @@ async def register(payload: RegisterRequest, request: Request):
             security_answer=payload.security_answer,
             avatar_color=payload.avatar_color,
             ip_address=ip,
+            user_agent=ua,
         )
     except Exception as exc:
         if "UNIQUE" in str(exc).upper():
             raise HTTPException(status_code=409, detail="El nombre de usuario ya existe.") from exc
         raise HTTPException(status_code=400, detail="No se pudo crear el usuario.") from exc
 
-    token = database.create_session(user["id"], ip)
+    token = auth_database.create_session(user["id"], ip, ua)
     await manager.broadcast_json({"type": "users_updated"})
     return {
         "token": token,
@@ -327,6 +380,7 @@ async def register(payload: RegisterRequest, request: Request):
             "alias": user["alias"],
             "role": user["role"],
             "avatar_color": user["avatar_color"],
+            "must_change_password": bool(user["must_change_password"]),
         },
     }
 
@@ -334,19 +388,21 @@ async def register(payload: RegisterRequest, request: Request):
 @app.post("/api/login")
 async def login(payload: LoginRequest, request: Request):
     ip = get_client_ip(request)
-    ip_ban = database.check_active_ban(ip_address=ip)
+    ua = get_user_agent(request)
+    ip_ban = auth_database.check_active_ban(ip_address=ip)
     if ip_ban:
         raise HTTPException(status_code=403, detail=format_ban_error(ip_ban))
 
-    user = database.authenticate_user(payload.username, payload.password, ip)
-    if not user:
-        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
+    user, err = auth_database.authenticate_user(payload.username, payload.password, ip, ua)
+    if err:
+        code = 429 if "Demasiados intentos" in err else 401
+        raise HTTPException(status_code=code, detail=err)
 
-    ban = database.check_active_ban(user_id=user["id"], ip_address=ip)
+    ban = auth_database.check_active_ban(user_id=user["id"], ip_address=ip)
     if ban:
         raise HTTPException(status_code=403, detail=format_ban_error(ban))
 
-    token = database.create_session(user["id"], ip)
+    token = auth_database.create_session(user["id"], ip, ua)
     return {
         "token": token,
         "user": {
@@ -355,30 +411,65 @@ async def login(payload: LoginRequest, request: Request):
             "alias": user["alias"],
             "role": user["role"],
             "avatar_color": user["avatar_color"],
+            "must_change_password": bool(user["must_change_password"]),
         },
     }
 
 
 @app.post("/api/logout")
 async def logout(user: dict[str, Any] = Depends(get_current_user)):
-    database.delete_session(user["_token"])
+    auth_database.delete_session(user["_token"])
     return {"ok": True}
 
 
 @app.get("/api/recover-question/{username}")
-async def get_recover_question(username: str):
-    q = database.get_security_question(username)
+async def get_recover_question(username: str, request: Request):
+    ip = get_client_ip(request)
+    rate_key = f"{username.strip()}|{ip}"
+    locked_mins = auth_database.check_rate_limit("recovery", rate_key)
+    if locked_mins:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Demasiados intentos fallidos. Espera {locked_mins} minutos.",
+        )
+    q = auth_database.get_security_question(username)
     if not q:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado o protegido.")
+        raise HTTPException(status_code=404, detail="Datos de recuperación no disponibles para esa cuenta.")
     return {"security_question": q}
 
 
 @app.post("/api/recover-password")
-async def recover_password(payload: RecoverPasswordRequest):
-    ok = database.recover_password(payload.username, payload.security_answer, payload.new_password)
-    if not ok:
-        raise HTTPException(status_code=400, detail="Respuesta secreta incorrecta o usuario no válido.")
-    return {"ok": True}
+async def recover_password(payload: RecoverPasswordRequest, request: Request):
+    ip = get_client_ip(request)
+    ua = get_user_agent(request)
+    user, err = auth_database.recover_password_step2(
+        username=payload.username,
+        security_answer=payload.security_answer,
+        new_password=payload.new_password,
+        ip_address=ip,
+        user_agent=ua,
+    )
+    if err:
+        code = 429 if "Demasiados intentos" in err else 400
+        raise HTTPException(status_code=code, detail=err)
+
+    ban = auth_database.check_active_ban(user_id=user["id"], ip_address=ip)
+    if ban:
+        raise HTTPException(status_code=403, detail=format_ban_error(ban))
+
+    token = auth_database.create_session(user["id"], ip, ua)
+    return {
+        "ok": True,
+        "token": token,
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "alias": user["alias"],
+            "role": user["role"],
+            "avatar_color": user["avatar_color"],
+            "must_change_password": False,
+        },
+    }
 
 
 @app.get("/api/me")
@@ -389,12 +480,18 @@ async def get_me(user: dict[str, Any] = Depends(get_current_user)):
         "alias": user["alias"],
         "role": user["role"],
         "avatar_color": user["avatar_color"],
+        "security_question": user["security_question"],
+        "must_change_password": bool(user["must_change_password"]),
     }
 
 
 @app.put("/api/profile/alias")
-async def update_alias(payload: AliasUpdateRequest, user: dict[str, Any] = Depends(get_current_user)):
-    updated = database.update_user_alias(user["id"], payload.alias, payload.avatar_color)
+async def update_alias(
+    payload: AliasUpdateRequest, user: dict[str, Any] = Depends(get_current_user)
+):
+    updated = auth_database.update_user_alias(
+        user["id"], payload.alias, payload.avatar_color, actor_id=user["id"], actor_role="self"
+    )
     if not updated:
         raise HTTPException(status_code=400, detail="Alias inválido.")
     for c in manager.connections:
@@ -415,16 +512,128 @@ async def update_alias(payload: AliasUpdateRequest, user: dict[str, Any] = Depen
     }
 
 
-# --- CHAT & MEDIA ROUTES ---
+@app.put("/api/profile/security")
+async def update_security(
+    payload: SecurityUpdateRequest, user: dict[str, Any] = Depends(get_current_user)
+):
+    ok = auth_database.update_own_security(
+        user["id"], payload.current_password, payload.security_question, payload.security_answer
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail="Tu contraseña actual no coincide.")
+    return {"ok": True}
+
+
+@app.post("/api/profile/change-forced-password")
+async def change_forced_password(
+    payload: ForcedPasswordChangeRequest, user: dict[str, Any] = Depends(get_current_user)
+):
+    updated = auth_database.change_forced_password(user["id"], payload.new_password)
+    if not updated:
+        raise HTTPException(status_code=400, detail="No se pudo actualizar la contraseña.")
+    return {"ok": True}
+
+
+# --- USERS, FRIENDS & DMS ROUTES ---
 
 @app.get("/api/users")
 async def list_users(user: dict[str, Any] = Depends(get_current_user)):
     is_admin = user["role"] == "admin"
-    users = database.list_users(for_admin=is_admin)
+    users = auth_database.list_users(for_admin=is_admin)
     online = manager.online_user_ids()
+    rels = database.get_user_relationships(user["id"], for_admin=is_admin)
+    blocked_by = set(rels["blocked_by_ids"])
+    blocked_mine = {b["user_id"] for b in rels["blocked"]}
+
+    visible_users = []
     for u in users:
-        u["online"] = u["id"] in online
-    return {"users": users}
+        if not is_admin and u["id"] in blocked_by:
+            u["online"] = False
+        else:
+            u["online"] = u["id"] in online
+        u["is_blocked"] = u["id"] in blocked_mine
+        visible_users.append(u)
+    return {"users": visible_users}
+
+
+@app.get("/api/friends")
+async def get_friends(user: dict[str, Any] = Depends(get_current_user)):
+    is_admin = user["role"] == "admin"
+    rels = database.get_user_relationships(user["id"], for_admin=is_admin)
+    online = manager.online_user_ids()
+    for grp in ("friends", "incoming_requests", "outgoing_requests", "blocked"):
+        for item in rels[grp]:
+            item["online"] = item["user_id"] in online if grp != "blocked" else False
+    return rels
+
+
+@app.post("/api/friends/request")
+async def send_friend_request(
+    payload: FriendRequestCreate, user: dict[str, Any] = Depends(get_current_user)
+):
+    target_id = payload.target_user_id
+    if target_id is None and payload.query:
+        q = payload.query.strip().lower()
+        all_users = auth_database.list_users(for_admin=True)
+        for candidate in all_users:
+            if candidate["id"] == user["id"]:
+                continue
+            if candidate["alias"].lower() == q or candidate["username"].lower() == q:
+                target_id = candidate["id"]
+                break
+        if target_id is None:
+            for candidate in all_users:
+                if candidate["id"] == user["id"]:
+                    continue
+                if q in candidate["alias"].lower():
+                    target_id = candidate["id"]
+                    break
+
+    if not target_id:
+        raise HTTPException(status_code=404, detail="No se encontró ningún amigo con ese nombre o alias.")
+
+    try:
+        rel = database.send_friend_request(user["id"], target_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await manager.send_to_user(target_id, {"type": "friends_updated"})
+    await manager.send_to_user(user["id"], {"type": "friends_updated"})
+    return {"friendship": rel}
+
+
+@app.post("/api/friends/respond")
+async def respond_friend_request(
+    payload: FriendRespondRequest, user: dict[str, Any] = Depends(get_current_user)
+):
+    try:
+        rel = database.respond_friendship(user["id"], payload.target_user_id, payload.action)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await manager.send_to_user(payload.target_user_id, {"type": "friends_updated"})
+    await manager.send_to_user(user["id"], {"type": "friends_updated"})
+    return {"friendship": rel}
+
+
+@app.get("/api/dms/summary")
+async def get_dms_summary(user: dict[str, Any] = Depends(get_current_user)):
+    is_admin = user["role"] == "admin"
+    summary = database.get_dms_conversations_summary(user["id"], for_admin=is_admin)
+    online = manager.online_user_ids()
+    for s in summary:
+        s["online"] = s["user_id"] in online
+    return {"conversations": summary}
+
+
+@app.post("/api/dms/{friend_id}/read")
+async def mark_dm_read(friend_id: int, user: dict[str, Any] = Depends(get_current_user)):
+    database.mark_dm_as_read(user["id"], friend_id)
+    return {"ok": True}
 
 
 @app.get("/api/channels")
@@ -458,9 +667,14 @@ async def get_dms(
     search: Optional[str] = Query(default=None),
     user: dict[str, Any] = Depends(get_current_user),
 ):
-    friend = database.get_user_by_id(friend_id)
+    friend = auth_database.get_user_by_id(friend_id)
     if not friend:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    rel = database.get_friendship_between(user["id"], friend_id)
+    if rel and rel["status"] == "blocked":
+        raise HTTPException(status_code=403, detail="Conversación bloqueada.")
+
+    database.mark_dm_as_read(user["id"], friend_id)
     is_admin = user["role"] == "admin"
     msgs = database.get_direct_messages(
         user_a=user["id"],
@@ -470,10 +684,19 @@ async def get_dms(
         limit=150,
         search=search,
     )
+    can_send, block_reason = database.can_send_dm(user["id"], friend_id)
+    is_incoming_request = bool(
+        rel and rel["status"] == "pending" and rel["action_user_id"] != user["id"]
+    )
+
     friend_info: dict[str, Any] = {
         "id": friend["id"],
         "alias": friend["alias"],
         "avatar_color": friend["avatar_color"],
+        "friendship_status": rel["status"] if rel else "none",
+        "is_incoming_request": is_incoming_request,
+        "can_send": can_send,
+        "block_reason": block_reason,
     }
     if is_admin:
         friend_info["username"] = friend["username"]
@@ -486,9 +709,13 @@ async def upload_image(
     is_hd: bool = Form(default=False),
     user: dict[str, Any] = Depends(get_current_user),
 ):
+    if user.get("must_change_password"):
+        raise HTTPException(status_code=403, detail="Debes cambiar tu contraseña antes de continuar.")
     raw_bytes = await file.read()
     try:
-        meta = image_service.process_and_save_image(raw_bytes, file.filename or "imagen.webp", is_hd=is_hd)
+        meta = image_service.process_and_save_image(
+            raw_bytes, file.filename or "imagen.webp", is_hd=is_hd
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return meta
@@ -525,37 +752,204 @@ async def delete_dm(dm_id: int, user: dict[str, Any] = Depends(get_current_user)
     if not deleted:
         raise HTTPException(status_code=404, detail="Mensaje privado no encontrado.")
     image_service.delete_upload_file(deleted.get("image_url"))
-    for c in list(manager.connections):
-        if c["user_id"] in (deleted["sender_id"], deleted["receiver_id"]):
-            try:
-                await c["ws"].send_json(
-                    {
-                        "type": "message_deleted",
-                        "target_type": "dm",
-                        "id": dm_id,
-                    }
-                )
-            except Exception:
-                pass
+    for uid in (deleted["sender_id"], deleted["receiver_id"]):
+        await manager.send_to_user(
+            uid,
+            {"type": "message_deleted", "target_type": "dm", "id": dm_id},
+        )
     return {"ok": True}
 
 
-# --- ADMIN MODERATION, BANS & BACKUPS ---
+# --- ADMIN MODERATION, SUPERPOWERS, DB & BACKUPS ---
+
+@app.get("/api/admin/database/users")
+async def admin_db_users(admin: dict[str, Any] = Depends(require_admin)):
+    users = auth_database.list_users(for_admin=True)
+    online = manager.online_user_ids()
+    for u in users:
+        u["online"] = u["id"] in online
+    return {"users": users}
+
+
+@app.put("/api/admin/database/users/{user_id}")
+async def admin_db_edit_user(
+    user_id: int,
+    payload: AdminEditUserRequest,
+    admin: dict[str, Any] = Depends(require_admin),
+):
+    try:
+        updated = auth_database.admin_update_user(
+            admin_id=admin["id"],
+            user_id=user_id,
+            username=payload.username,
+            password=payload.password,
+            alias=payload.alias,
+            avatar_color=payload.avatar_color,
+            role=payload.role,
+            security_question=payload.security_question,
+            security_answer=payload.security_answer,
+            admin_notes=payload.admin_notes,
+            must_change_password=payload.must_change_password,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await manager.broadcast_json(
+        {
+            "type": "alias_updated",
+            "user_id": updated["id"],
+            "alias": updated["alias"],
+            "avatar_color": updated["avatar_color"],
+        }
+    )
+    return {"user": updated}
+
+
+@app.get("/api/admin/database/users/{user_id}/logs")
+async def admin_db_user_logs(
+    user_id: int, admin: dict[str, Any] = Depends(require_admin)
+):
+    return auth_database.get_user_logs_and_history(user_id)
+
+
+@app.post("/api/admin/generate-temp-password/{user_id}")
+async def admin_gen_temp_password(
+    user_id: int, admin: dict[str, Any] = Depends(require_admin)
+):
+    target = auth_database.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    temp_pw = auth_database.admin_generate_temp_password(admin["id"], user_id)
+    auth_database.add_audit_log(
+        "admin_temp_password", target["username"], f"Admin generó contraseña temporal para @{target['username']}"
+    )
+    return {"temp_password": temp_pw, "username": target["username"]}
+
+
+@app.post("/api/admin/impersonate/{user_id}")
+async def admin_impersonate(
+    user_id: int, request: Request, admin: dict[str, Any] = Depends(require_admin)
+):
+    target = auth_database.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    token = auth_database.create_session(
+        user_id=target["id"],
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request),
+        is_impersonated=True,
+    )
+    auth_database.add_audit_log(
+        "admin_impersonate", target["username"], f"Admin ingresó como @{target['username']}"
+    )
+    return {
+        "token": token,
+        "user": {
+            "id": target["id"],
+            "username": target["username"],
+            "alias": target["alias"],
+            "role": target["role"],
+        },
+    }
+
+
+@app.get("/api/admin/audit-logs")
+async def admin_audit_logs(admin: dict[str, Any] = Depends(require_admin)):
+    return {"logs": auth_database.get_audit_logs(limit=60)}
+
+
+@app.get("/api/admin/dms/inspect")
+async def admin_inspect_dms_overview(admin: dict[str, Any] = Depends(require_admin)):
+    return {"threads": database.admin_list_all_dm_threads()}
+
+
+@app.get("/api/admin/dms/inspect/{user_a}/{user_b}")
+async def admin_inspect_dm_thread(
+    user_a: int, user_b: int, admin: dict[str, Any] = Depends(require_admin)
+):
+    msgs = database.get_direct_messages(user_a, user_b, viewer_id=admin["id"], for_admin=True, limit=250)
+    return {"messages": msgs}
+
+
+@app.get("/api/admin/database/export")
+async def admin_export_users_db(
+    format: str = Query(default="json", pattern="^(json|db)$"),
+    admin: dict[str, Any] = Depends(require_admin),
+):
+    date_str = datetime.now().strftime("%m-%d-%Y")
+    if format == "db":
+        db_path = Path(auth_database.AUTH_DB_PATH)
+        if not db_path.is_file():
+            raise HTTPException(status_code=404, detail="Archivo .db no encontrado.")
+        return FileResponse(
+            db_path,
+            media_type="application/octet-stream",
+            filename=f"auth_users_{date_str}.db",
+        )
+    json_str = auth_database.export_users_db_json()
+    return Response(
+        content=json_str,
+        media_type="application/json; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="users_backup_{date_str}.json"'},
+    )
+
+
+@app.post("/api/admin/database/restore")
+async def admin_restore_users_db(
+    file: UploadFile = File(...),
+    admin: dict[str, Any] = Depends(require_admin),
+):
+    raw = await file.read()
+    fname = (file.filename or "").lower()
+    try:
+        if fname.endswith(".db") or fname.endswith(".sqlite"):
+            count = auth_database.restore_users_from_sqlite_bytes(raw)
+        else:
+            count = auth_database.restore_users_from_json(raw.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await manager.broadcast_json({"type": "users_updated"})
+    return {"ok": True, "restored_users": count}
+
+
+@app.post("/api/admin/database/backup-now")
+async def admin_backup_users_now(admin: dict[str, Any] = Depends(require_admin)):
+    res = github_backup.run_users_db_backup(force=True)
+    return res
+
+
+@app.get("/api/admin/database/backups")
+async def admin_list_users_backups(admin: dict[str, Any] = Depends(require_admin)):
+    return {"files": github_backup.list_users_backups()}
+
+
+@app.get("/api/admin/database/backups/{filename}")
+async def admin_download_users_backup(
+    filename: str, admin: dict[str, Any] = Depends(require_admin)
+):
+    safe_name = Path(filename).name
+    target = (github_backup.USERS_BACKUP_DIR / safe_name).resolve()
+    if target.parent != github_backup.USERS_BACKUP_DIR.resolve() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Archivo de respaldo no encontrado.")
+    return FileResponse(target, filename=safe_name)
+
 
 @app.get("/api/admin/bans")
 async def admin_list_bans(
     include_inactive: bool = Query(default=False),
     admin: dict[str, Any] = Depends(require_admin),
 ):
-    return {"bans": database.list_bans(include_inactive=include_inactive)}
+    return {"bans": auth_database.list_bans(include_inactive=include_inactive)}
 
 
 @app.post("/api/admin/bans")
-async def admin_create_ban(payload: BanCreateRequest, admin: dict[str, Any] = Depends(require_admin)):
+async def admin_create_ban(
+    payload: BanCreateRequest, admin: dict[str, Any] = Depends(require_admin)
+):
     if payload.target_user_id is None and not (payload.ip_address and payload.ip_address.strip()):
         raise HTTPException(status_code=400, detail="Debes indicar un usuario o una IP.")
     try:
-        ban = database.create_ban(
+        ban = auth_database.create_ban(
             admin_id=admin["id"],
             target_user_id=payload.target_user_id,
             ip_address=payload.ip_address,
@@ -576,20 +970,9 @@ async def admin_create_ban(payload: BanCreateRequest, admin: dict[str, Any] = De
 
 @app.delete("/api/admin/bans/{ban_id}")
 async def admin_remove_ban(ban_id: int, admin: dict[str, Any] = Depends(require_admin)):
-    ok = database.remove_ban(ban_id)
+    ok = auth_database.remove_ban(ban_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Baneo no encontrado.")
-    return {"ok": True}
-
-
-@app.post("/api/admin/reset-password")
-async def admin_reset_user_password(
-    payload: AdminResetPasswordRequest,
-    admin: dict[str, Any] = Depends(require_admin),
-):
-    ok = database.admin_reset_password(payload.user_id, payload.new_password)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
     return {"ok": True}
 
 
@@ -606,7 +989,9 @@ async def admin_list_backups(admin: dict[str, Any] = Depends(require_admin)):
 
 
 @app.get("/api/admin/backups/{filename}")
-async def admin_download_backup(filename: str, admin: dict[str, Any] = Depends(require_admin)):
+async def admin_download_backup(
+    filename: str, admin: dict[str, Any] = Depends(require_admin)
+):
     safe_name = Path(filename).name
     target = (github_backup.BACKUP_DIR / safe_name).resolve()
     if target.parent != github_backup.BACKUP_DIR.resolve() or not target.is_file():
@@ -629,23 +1014,26 @@ async def admin_export_snapshot(admin: dict[str, Any] = Depends(require_admin)):
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket, token: str = Query(default="")):
     ip = get_client_ip(ws)
-    user = database.get_user_by_token(token)
+    ua = get_user_agent(ws)
+    user = auth_database.get_user_by_token(token)
     if not user:
         await ws.close(code=4001)
         return
 
-    ban = database.check_active_ban(user_id=user["id"], ip_address=ip)
+    ban = auth_database.check_active_ban(user_id=user["id"], ip_address=ip)
     if ban:
         await ws.accept()
         await ws.send_json({"type": "banned", "reason": format_ban_error(ban)})
         await ws.close(code=4003)
         return
 
-    database.update_user_ip(user["id"], ip)
+    if not user.get("is_impersonated"):
+        auth_database.update_user_ip(user["id"], ip, ua)
+
     became_online = await manager.connect(ws, user, ip)
     await manager.broadcast_presence()
 
-    if became_online:
+    if became_online and not user.get("is_impersonated"):
         await manager.broadcast_json(
             {
                 "type": "system_notice",
@@ -657,12 +1045,18 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(default="")):
     try:
         while True:
             data = await ws.receive_json()
-            # Re-verify user & ban status per action
-            active_ban = database.check_active_ban(user_id=user["id"], ip_address=ip)
+            active_ban = auth_database.check_active_ban(user_id=user["id"], ip_address=ip)
             if active_ban:
                 await ws.send_json({"type": "banned", "reason": format_ban_error(active_ban)})
                 await ws.close(code=4003)
                 break
+
+            fresh_user = auth_database.get_user_by_id(user["id"])
+            if fresh_user and fresh_user.get("must_change_password"):
+                await ws.send_json(
+                    {"type": "error", "detail": "Debes cambiar tu contraseña antes de enviar mensajes."}
+                )
+                continue
 
             action = data.get("action")
             if action == "send_channel_message":
@@ -693,6 +1087,11 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(default="")):
                 reply_to_id = data.get("reply_to_id")
                 if not receiver_id or (not content and not image_meta):
                     continue
+                allowed, reason = database.can_send_dm(user["id"], receiver_id)
+                if not allowed:
+                    await ws.send_json({"type": "error", "detail": reason})
+                    continue
+
                 dm_id = database.create_direct_message(
                     sender_id=user["id"],
                     receiver_id=receiver_id,
@@ -706,6 +1105,8 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(default="")):
                     reply_to_id=int(reply_to_id) if reply_to_id else None,
                 )
                 await manager.send_dm_message(dm_id, user["id"], receiver_id)
+                await manager.send_to_user(receiver_id, {"type": "friends_updated"})
+                await manager.send_to_user(user["id"], {"type": "friends_updated"})
 
             elif action == "toggle_reaction":
                 target_type = data.get("target_type")
@@ -732,8 +1133,8 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(default="")):
     finally:
         went_offline = manager.disconnect(ws)
         await manager.broadcast_presence()
-        if went_offline:
-            latest_user = database.get_user_by_id(went_offline["user_id"])
+        if went_offline and not went_offline.get("is_impersonated"):
+            latest_user = auth_database.get_user_by_id(went_offline["user_id"])
             alias = latest_user["alias"] if latest_user else went_offline["alias"]
             await manager.broadcast_json(
                 {

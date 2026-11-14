@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content" />
+  <meta name="referrer" content="no-referrer" />
+  <title>DeltaChat — Tablón Privado</title>
+  <link rel="icon" type="image/jpeg" href="/static/assets/logo.jpg" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- PANTALLA DE ACCESO (LOGIN / REGISTRO / RECUPERACIÓN) -->
+  <div id="auth-screen" class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-header">
+        <img src="/static/assets/logo.jpg" alt="DeltaChat Logo" class="auth-logo" />
+        <div>
+          <h1>DeltaChat</h1>
+          <p class="greentext">&gt;tablón privado de amigus — entra y postea</p>
+        </div>
+      </div>
+
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" data-tab="login">[ Entrar ]</button>
+        <button type="button" class="auth-tab" data-tab="register">[ Registrarse ]</button>
+        <button type="button" class="auth-tab" data-tab="recover">[ Olvidé mi clave ]</button>
+      </div>
+
+      <div id="auth-error" class="alert-box hidden"></div>
+      <div id="auth-success" class="alert-box success hidden"></div>
+
+      <!-- LOGIN -->
+      <form id="login-form" class="auth-form">
+        <label>
+          Usuario
+          <input type="text" id="login-username" required autocomplete="username" placeholder="Tu usuario" />
+        </label>
+        <label>
+          Contraseña
+          <input type="password" id="login-password" required autocomplete="current-password" placeholder="••••••••" />
+        </label>
+        <button type="submit" class="btn-primary">Entrar al Tablón</button>
+      </form>
+
+      <!-- REGISTRO -->
+      <form id="register-form" class="auth-form hidden">
+        <label>
+          Nombre de Usuario (Privado para iniciar sesión)
+          <input type="text" id="reg-username" required minlength="2" maxlength="32" placeholder="ej. carlos99" />
+        </label>
+        <label>
+          Alias Público (Cómo te verán en el chat)
+          <input type="text" id="reg-alias" maxlength="32" placeholder="ej. AnonCarlos (puedes cambiarlo luego)" />
+        </label>
+        <label>
+          Contraseña
+          <input type="password" id="reg-password" required minlength="4" placeholder="Mínimo 4 caracteres" />
+        </label>
+        <label>
+          Color del Alias
+          <select id="reg-color">
+            <option value="#b5bd68">Verde Lima (#b5bd68)</option>
+            <option value="#81a2be">Azul Acero (#81a2be)</option>
+            <option value="#b294bb">Violeta Retro (#b294bb)</option>
+            <option value="#f0c674">Ámbar (#f0c674)</option>
+            <option value="#8abeb7">Turquesa (#8abeb7)</option>
+            <option value="#de935f">Naranja (#de935f)</option>
+          </select>
+        </label>
+        <label>
+          Pregunta secreta (para recuperar tu clave)
+          <input type="text" id="reg-question" required minlength="3" placeholder="ej. ¿Nombre de tu primer perro?" />
+        </label>
+        <label>
+          Respuesta secreta
+          <input type="text" id="reg-answer" required placeholder="Tu respuesta secreta" />
+        </label>
+        <button type="submit" class="btn-primary">Crear Cuenta y Entrar</button>
+      </form>
+
+      <!-- RECUPERACIÓN -->
+      <form id="recover-form" class="auth-form hidden">
+        <label>
+          Tu Usuario
+          <div class="inline-row">
+            <input type="text" id="rec-username" required placeholder="Escribe tu usuario" />
+            <button type="button" id="btn-fetch-question" class="btn-secondary">Buscar</button>
+          </div>
+        </label>
+        <div id="recover-step2" class="hidden">
+          <p class="question-display">Pregunta: <strong id="rec-question-text"></strong></p>
+          <label>
+            Tu Respuesta
+            <input type="text" id="rec-answer" placeholder="Respuesta secreta" />
+          </label>
+          <label>
+            Nueva Contraseña
+            <input type="password" id="rec-new-password" minlength="4" placeholder="Nueva contraseña" />
+          </label>
+          <button type="submit" class="btn-primary">Cambiar Contraseña</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PANTALLA PRINCIPAL DE CHAT -->
+  <div id="chat-screen" class="app-shell hidden">
+
+    <!-- BARRA SUPERIOR ESTILO 4CHAN -->
+    <header class="top-nav">
+      <div class="nav-left">
+        <button type="button" id="btn-menu-toggle" class="mobile-only btn-icon" aria-label="Menú">☰</button>
+        <img src="/static/assets/logo.jpg" alt="DeltaChat" class="nav-logo" />
+        <span class="brand-title">DeltaChat</span>
+        <nav id="top-board-links" class="board-links desktop-only"></nav>
+      </div>
+      <div class="nav-right">
+        <span class="conn-dot" id="ws-status" title="Estado de conexión">●</span>
+        <button type="button" id="btn-open-alias" class="btn-chip" title="Cambiar tu Alias">
+          Alias: <strong id="my-alias-label">...</strong>
+        </button>
+        <button type="button" id="btn-open-admin" class="btn-chip btn-admin hidden">[ Panel Admin ]</button>
+        <button type="button" id="btn-logout" class="btn-chip">[ Salir ]</button>
+      </div>
+    </header>
+
+    <div class="workspace-grid">
+      <!-- BACKDROP MÓVIL -->
+      <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
+
+      <!-- BARRA LATERAL: TABLONES Y DMs -->
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-section">
+          <div class="section-title">Tablones</div>
+          <ul id="channels-list" class="nav-list"></ul>
+        </div>
+        <div class="sidebar-section">
+          <div class="section-title">Amigus &amp; DMs Privados</div>
+          <ul id="users-list" class="nav-list"></ul>
+        </div>
+      </aside>
+
+      <!-- ÁREA CENTRAL DE POSTS -->
+      <main class="chat-main">
+        <div class="board-banner">
+          <div class="banner-info">
+            <h2 id="active-room-title">/gen/ - General</h2>
+            <p id="active-room-desc">Charla libre del grupo</p>
+          </div>
+          <div class="search-wrap">
+            <input type="search" id="search-input" placeholder="Buscar en el historial..." />
+          </div>
+        </div>
+
+        <div id="messages-container" class="messages-feed"></div>
+
+        <!-- COMPOSITOR / REPLY BOX -->
+        <footer class="composer">
+          <div id="reply-bar" class="composer-bar hidden">
+            <span>Respondiendo a <strong id="reply-preview-text"></strong></span>
+            <button type="button" id="btn-cancel-reply" class="btn-mini">[x]</button>
+          </div>
+
+          <div id="image-preview-bar" class="composer-bar hidden">
+            <div class="img-prep">
+              <img id="img-prep-thumb" src="" alt="Vista previa" />
+              <div>
+                <div id="img-prep-name" class="mono-sm"></div>
+                <label class="hd-toggle">
+                  <input type="checkbox" id="chk-hd-mode" />
+                  <span>Modo HD (Dura 10 min y se autodestruye)</span>
+                </label>
+              </div>
+            </div>
+            <button type="button" id="btn-cancel-image" class="btn-mini">[Quitar]</button>
+          </div>
+
+          <div id="emoji-popover" class="emoji-popover hidden"></div>
+
+          <div class="composer-controls">
+            <input type="file" id="file-input" accept="image/*" class="hidden" />
+            <button type="button" id="btn-attach" class="btn-secondary" title="Subir foto">📷 Foto</button>
+            <button type="button" id="btn-emoji-picker" class="btn-secondary" title="Emojis">😀</button>
+            <textarea
+              id="message-input"
+              rows="2"
+              placeholder="Escribe un mensaje... (usa >texto para greentext o >>No para citar)"
+            ></textarea>
+            <button type="button" id="btn-send" class="btn-primary">Post</button>
+          </div>
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL CAMBIAR ALIAS -->
+  <div id="alias-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Cambiar mi Alias</h3>
+        <button type="button" class="btn-mini modal-close" data-close="alias-modal">[x]</button>
+      </div>
+      <form id="alias-form" class="modal-body">
+        <label>
+          Nuevo Alias Público
+          <input type="text" id="new-alias-input" required maxlength="32" />
+        </label>
+        <label>
+          Color de Nombre
+          <select id="new-color-input">
+            <option value="#b5bd68">Verde Lima (#b5bd68)</option>
+            <option value="#81a2be">Azul Acero (#81a2be)</option>
+            <option value="#b294bb">Violeta Retro (#b294bb)</option>
+            <option value="#f0c674">Ámbar (#f0c674)</option>
+            <option value="#8abeb7">Turquesa (#8abeb7)</option>
+            <option value="#de935f">Naranja (#de935f)</option>
+            <option value="#cc6666">Rojo Carmesí (#cc6666)</option>
+          </select>
+        </label>
+        <button type="submit" class="btn-primary">Guardar Cambios</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL PANEL DE ADMINISTRADOR -->
+  <div id="admin-modal" class="modal hidden">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h3>Panel de Administración (dabo777)</h3>
+        <button type="button" class="btn-mini modal-close" data-close="admin-modal">[x]</button>
+      </div>
+      <div class="admin-tabs">
+        <button type="button" class="admin-tab active" data-atab="users">Usuarios y Baneos</button>
+        <button type="button" class="admin-tab" data-atab="bans">Baneos Activos (Unban)</button>
+        <button type="button" class="admin-tab" data-atab="backups">Respaldo GitHub &amp; Mes</button>
+      </div>
+
+      <div id="atab-users" class="modal-body admin-pane">
+        <div id="admin-users-list" class="admin-list"></div>
+        <hr class="sep" />
+        <h4>Baneo directo por IP</h4>
+        <form id="direct-ip-ban-form" class="inline-ban-form">
+          <input type="text" id="ban-ip-input" placeholder="Dirección IP (ej. 192.168.1.50)" required />
+          <select id="ban-ip-type">
+            <option value="permaban">Permaban (Permanente)</option>
+            <option value="temp">Suspensión Temporal</option>
+          </select>
+          <input type="number" id="ban-ip-mins" placeholder="Minutos (si es temp)" min="1" value="60" />
+          <input type="text" id="ban-ip-reason" placeholder="Motivo del baneo" />
+          <button type="submit" class="btn-danger">Aplicar Ban IP</button>
+        </form>
+      </div>
+
+      <div id="atab-bans" class="modal-body admin-pane hidden">
+        <div id="admin-bans-list" class="admin-list"></div>
+      </div>
+
+      <div id="atab-backups" class="modal-body admin-pane hidden">
+        <p class="mono-sm">
+          Cada mes el chat respalda automáticamente los mensajes (usuario, fecha y texto; sin archivos) en GitHub con formato <strong>MM-DD-YYYY</strong> y reinicia las salas.
+        </p>
+        <div class="backup-actions">
+          <button type="button" id="btn-force-backup" class="btn-danger">Respaldar en GitHub y Reiniciar Chat Ahora</button>
+          <button type="button" id="btn-export-snapshot" class="btn-secondary">Descargar Snapshot Actual (.txt)</button>
+        </div>
+        <div id="backup-status-msg" class="alert-box hidden"></div>
+        <h4>Respaldos guardados localmente:</h4>
+        <ul id="local-backups-list" class="backup-files-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL BANEO RÁPIDO DE USUARIO (ADMIN) -->
+  <div id="ban-user-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Sancionar / Banear Usuario</h3>
+        <button type="button" class="btn-mini modal-close" data-close="ban-user-modal">[x]</button>
+      </div>
+      <form id="ban-user-form" class="modal-body">
+        <p id="ban-target-label" class="mono-sm"></p>
+        <input type="hidden" id="ban-target-uid" />
+        <input type="hidden" id="ban-target-ip" />
+        <label>
+          Tipo de Sanción
+          <select id="ban-user-type">
+            <option value="permaban">Permaban (Ban permanente de Usuario + IP)</option>
+            <option value="temp">Suspensión Temporal</option>
+          </select>
+        </label>
+        <label id="ban-duration-wrap" class="hidden">
+          Duración de Suspensión
+          <select id="ban-duration-preset">
+            <option value="10">10 minutos</option>
+            <option value="60" selected>1 hora (60 min)</option>
+            <option value="360">6 horas</option>
+            <option value="1440">24 horas (1 día)</option>
+            <option value="10080">7 días</option>
+            <option value="custom">Personalizado (minutos)</option>
+          </select>
+        </label>
+        <label id="ban-custom-mins-wrap" class="hidden">
+          Minutos personalizados
+          <input type="number" id="ban-custom-mins" min="1" value="30" />
+        </label>
+        <label>
+          Motivo (se mostrará al usuario)
+          <input type="text" id="ban-user-reason" placeholder="ej. Spam / Mala conducta" />
+        </label>
+        <button type="submit" class="btn-danger">Ejecutar Sanción</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- VISOR LIGHTBOX -->
+  <div id="lightbox-modal" class="lightbox hidden">
+    <div class="lightbox-toolbar">
+      <span id="lightbox-meta" class="mono-sm"></span>
+      <div class="lightbox-actions">
+        <a id="lightbox-download" href="#" download class="btn-primary">⬇ Descargar</a>
+        <button type="button" id="lightbox-close" class="btn-secondary">[ Cerrar ]</button>
+      </div>
+    </div>
+    <div class="lightbox-stage">
+      <img id="lightbox-img" src="" alt="Vista ampliada" />
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

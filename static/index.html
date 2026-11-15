@@ -177,8 +177,15 @@
             <p id="active-room-desc">Charla libre del grupo</p>
           </div>
           <div class="search-wrap">
-            <input type="search" id="search-input" placeholder="Buscar en el historial..." />
+            <input type="search" id="search-input" placeholder="Buscar texto o usa: #fotos..." />
+            <button type="button" id="btn-filter-media" class="btn-chip" title="Ver solo fotos">📷 Fotos</button>
           </div>
+        </div>
+
+        <div id="channel-pinned-bar" class="pinned-bar hidden">
+          <div class="pinned-tag">📌 FIJADO:</div>
+          <div id="channel-pinned-text" class="pinned-content"></div>
+          <button type="button" id="btn-unpin-msg" class="btn-mini hidden" title="Desfijar">[x]</button>
         </div>
 
         <div id="dm-request-banner" class="dm-status-banner hidden">
@@ -211,10 +218,16 @@
               <img id="img-prep-thumb" src="" alt="Vista previa" />
               <div>
                 <div id="img-prep-name" class="mono-sm"></div>
-                <label class="hd-toggle">
-                  <input type="checkbox" id="chk-hd-mode" />
-                  <span>Modo HD (Dura 10 min y se autodestruye)</span>
-                </label>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;">
+                  <label class="hd-toggle">
+                    <input type="checkbox" id="chk-hd-mode" />
+                    <span>Modo HD (10 min)</span>
+                  </label>
+                  <label class="hd-toggle">
+                    <input type="checkbox" id="chk-nsfw-mode" />
+                    <span style="color:var(--warn-amber)">🔞 Censura +18 / Spoiler</span>
+                  </label>
+                </div>
               </div>
             </div>
             <button type="button" id="btn-cancel-image" class="btn-mini">[Quitar]</button>
@@ -336,6 +349,7 @@
       </div>
       <div class="admin-tabs">
         <button type="button" class="admin-tab active" data-atab="users">Base de Datos Usuarios</button>
+        <button type="button" class="admin-tab" data-atab="channels">Gestión Tablones &amp; Permisos</button>
         <button type="button" class="admin-tab" data-atab="bans">Baneos Activos (Unban)</button>
         <button type="button" class="admin-tab" data-atab="dms">Moderación DMs</button>
         <button type="button" class="admin-tab" data-atab="audit">Auditoría</button>
@@ -359,6 +373,38 @@
           <input type="number" id="ban-ip-mins" placeholder="Minutos (si es temp)" min="1" value="60" />
           <input type="text" id="ban-ip-reason" placeholder="Motivo del baneo" />
           <button type="submit" class="btn-danger">Aplicar Ban IP</button>
+        </form>
+      </div>
+
+      <div id="atab-channels" class="modal-body admin-pane hidden">
+        <h4>Configurar Visibilidad y Acceso a Tablones</h4>
+        <p class="mono-sm">
+          Puedes hacer que un tablón sea <strong>Público</strong>, <strong>Exclusivo (solo para usuarios elegidos)</strong> o <strong>Oculto para vetados</strong>. Los usuarios sin permiso no verán el tablón ni podrán ingresar.
+        </p>
+        <div class="admin-toolbar" style="margin-bottom:10px;">
+          <label>
+            Seleccionar Tablón:
+            <select id="admin-channel-select"></select>
+          </label>
+        </div>
+        <form id="admin-channel-perm-form" class="stacked-form">
+          <label>
+            Tipo de Acceso
+            <select id="admin-channel-access-type">
+              <option value="public">Público (Visible para todos)</option>
+              <option value="whitelist">Exclusivo / Whitelist (Solo los usuarios marcados abajo pueden ver y entrar)</option>
+              <option value="blacklist">Lista Negra (Visible para todos EXCEPTO los marcados abajo)</option>
+            </select>
+          </label>
+          <label class="hd-toggle">
+            <input type="checkbox" id="admin-channel-announcement" />
+            <span>Tablón de Anuncios (Solo lectura: solo tú como Admin puedes postear)</span>
+          </label>
+          <label>
+            Seleccionar Usuarios para esta regla:
+            <div id="admin-channel-users-checklist" class="users-checklist"></div>
+          </label>
+          <button type="submit" class="btn-primary">Guardar Configuración del Tablón</button>
         </form>
       </div>
 

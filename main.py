@@ -308,6 +308,17 @@ class FriendRespondRequest(BaseModel):
     action: str = Field(pattern="^(accept|reject|block|unfriend|unblock)$")
 
 
+class ChannelVisibilityRequest(BaseModel):
+    access_type: str = Field(pattern="^(public|whitelist|blacklist)$")
+    user_ids: list[int] = Field(default_factory=list)
+    permission_type: str = Field(default="allow", pattern="^(allow|deny)$")
+    is_announcement: Optional[bool] = None
+
+
+class ChannelPinRequest(BaseModel):
+    message_id: Optional[int] = None
+
+
 # --- AUTH DEPENDENCIES ---
 
 async def get_current_user(
@@ -641,7 +652,8 @@ async def mark_dm_read(friend_id: int, user: dict[str, Any] = Depends(get_curren
 
 @app.get("/api/channels")
 async def list_channels(user: dict[str, Any] = Depends(get_current_user)):
-    return {"channels": database.list_channels()}
+    is_admin = user["role"] == "admin"
+    return {"channels": database.list_channels_for_user(user["id"], is_admin=is_admin)}
 
 
 @app.get("/api/messages/{channel_id}")
@@ -650,10 +662,13 @@ async def get_channel_messages(
     search: Optional[str] = Query(default=None),
     user: dict[str, Any] = Depends(get_current_user),
 ):
+    is_admin = user["role"] == "admin"
+    if not database.can_user_access_channel(user["id"], channel_id, is_admin=is_admin):
+        raise HTTPException(status_code=403, detail="No tienes acceso a este tablón.")
+
     ch = database.get_channel(channel_id)
     if not ch:
         raise HTTPException(status_code=404, detail="Tablón no encontrado.")
-    is_admin = user["role"] == "admin"
     msgs = database.get_channel_messages(
         channel_id=channel_id,
         viewer_id=user["id"],
@@ -710,6 +725,7 @@ async def get_dms(
 async def upload_image(
     file: UploadFile = File(...),
     is_hd: bool = Form(default=False),
+    is_nsfw: bool = Form(default=False),
     user: dict[str, Any] = Depends(get_current_user),
 ):
     if user.get("must_change_password"):
@@ -719,6 +735,7 @@ async def upload_image(
         meta = image_service.process_and_save_image(
             raw_bytes, file.filename or "imagen.webp", is_hd=is_hd
         )
+        meta["is_nsfw"] = bool(is_nsfw)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return meta
@@ -872,6 +889,47 @@ async def admin_inspect_dm_thread(
 ):
     msgs = database.get_direct_messages(user_a, user_b, viewer_id=admin["id"], for_admin=True, limit=250)
     return {"messages": msgs}
+
+
+@app.get("/api/admin/channels")
+async def admin_list_channels(admin: dict[str, Any] = Depends(require_admin)):
+    channels = database.list_channels_for_user(admin["id"], is_admin=True)
+    for ch in channels:
+        ch["permissions"] = database.get_channel_permissions(ch["id"])
+    return {"channels": channels}
+
+
+@app.put("/api/admin/channels/{channel_id}/visibility")
+async def admin_update_channel_visibility(
+    channel_id: int,
+    payload: ChannelVisibilityRequest,
+    admin: dict[str, Any] = Depends(require_admin),
+):
+    ch = database.admin_set_channel_visibility(
+        channel_id=channel_id,
+        access_type=payload.access_type,
+        user_ids=payload.user_ids,
+        permission_type=payload.permission_type,
+        is_announcement=payload.is_announcement,
+    )
+    auth_database.add_audit_log(
+        "channel_visibility_update",
+        admin["username"],
+        f"Actualizó visibilidad del tablón #{channel_id} ({payload.access_type})",
+    )
+    await manager.broadcast_json({"type": "channels_updated"})
+    return {"ok": True, "channel": ch}
+
+
+@app.post("/api/admin/channels/{channel_id}/pin")
+async def admin_pin_channel_message(
+    channel_id: int,
+    payload: ChannelPinRequest,
+    admin: dict[str, Any] = Depends(require_admin),
+):
+    ch = database.admin_pin_message(channel_id, payload.message_id)
+    await manager.broadcast_json({"type": "channels_updated", "pinned_channel_id": channel_id})
+    return {"ok": True, "channel": ch}
 
 
 @app.get("/api/admin/database/export")
@@ -1069,6 +1127,16 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(default="")):
                 reply_to_id = data.get("reply_to_id")
                 if not content and not image_meta:
                     continue
+
+                can_post, reason = database.can_user_post_in_channel(
+                    user["id"], channel_id, is_admin=(user["role"] == "admin")
+                )
+                if not can_post:
+                    await ws.send_json({"type": "error", "detail": reason})
+                    continue
+
+                is_nsfw = bool(data.get("is_nsfw")) or (bool(image_meta.get("is_nsfw")) if image_meta else False)
+
                 msg_id = database.create_channel_message(
                     channel_id=channel_id,
                     user_id=user["id"],
@@ -1079,6 +1147,7 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(default="")):
                     image_dims=image_meta.get("image_dims") if image_meta else None,
                     is_hd=bool(image_meta.get("is_hd")) if image_meta else False,
                     expires_at=image_meta.get("expires_at") if image_meta else None,
+                    is_nsfw=is_nsfw,
                     reply_to_id=int(reply_to_id) if reply_to_id else None,
                 )
                 await manager.broadcast_channel_message(msg_id)

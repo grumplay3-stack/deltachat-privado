@@ -55,7 +55,19 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 slug TEXT UNIQUE NOT NULL,
                 name TEXT NOT NULL,
-                description TEXT NOT NULL
+                description TEXT NOT NULL,
+                access_type TEXT NOT NULL DEFAULT 'public',
+                is_announcement INTEGER NOT NULL DEFAULT 0,
+                pinned_message_id INTEGER DEFAULT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS channel_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                permission_type TEXT NOT NULL CHECK(permission_type IN ('allow', 'deny')),
+                created_at REAL NOT NULL,
+                UNIQUE(channel_id, user_id)
             );
 
             CREATE TABLE IF NOT EXISTS messages (
@@ -72,6 +84,7 @@ def init_db() -> None:
                 is_hd INTEGER NOT NULL DEFAULT 0,
                 expires_at REAL,
                 is_expired INTEGER NOT NULL DEFAULT 0,
+                is_nsfw INTEGER NOT NULL DEFAULT 0,
                 reply_to_id INTEGER,
                 created_at REAL NOT NULL
             );
@@ -124,6 +137,20 @@ def init_db() -> None:
         dm_cols = {r["name"] for r in conn.execute("PRAGMA table_info(direct_messages)").fetchall()}
         if "is_read" not in dm_cols:
             conn.execute("ALTER TABLE direct_messages ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0")
+
+        # Migrate channels table schema if missing access_type
+        ch_cols = {r["name"] for r in conn.execute("PRAGMA table_info(channels)").fetchall()}
+        if "access_type" not in ch_cols:
+            conn.execute("ALTER TABLE channels ADD COLUMN access_type TEXT NOT NULL DEFAULT 'public'")
+        if "is_announcement" not in ch_cols:
+            conn.execute("ALTER TABLE channels ADD COLUMN is_announcement INTEGER NOT NULL DEFAULT 0")
+        if "pinned_message_id" not in ch_cols:
+            conn.execute("ALTER TABLE channels ADD COLUMN pinned_message_id INTEGER DEFAULT NULL")
+
+        # Migrate messages table schema if missing is_nsfw
+        msg_cols = {r["name"] for r in conn.execute("PRAGMA table_info(messages)").fetchall()}
+        if "is_nsfw" not in msg_cols:
+            conn.execute("ALTER TABLE messages ADD COLUMN is_nsfw INTEGER NOT NULL DEFAULT 0")
 
         for slug, name, desc in DEFAULT_CHANNELS:
             conn.execute(
@@ -222,9 +249,107 @@ def set_setting(key: str, value: str) -> None:
         )
 
 
-def list_channels() -> list[dict[str, Any]]:
+def list_channels_for_user(user_id: int, is_admin: bool = False) -> list[dict[str, Any]]:
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM channels ORDER BY id ASC").fetchall()
+        channels = [dict(r) for r in conn.execute("SELECT * FROM channels ORDER BY id ASC").fetchall()]
+        if is_admin:
+            return channels
+
+        # Check permissions for regular users
+        allowed: list[dict[str, Any]] = []
+        for ch in channels:
+            atype = ch.get("access_type", "public")
+            cid = ch["id"]
+            if atype == "public":
+                # Check blacklist
+                perm = conn.execute(
+                    "SELECT permission_type FROM channel_permissions WHERE channel_id = ? AND user_id = ?",
+                    (cid, user_id),
+                ).fetchone()
+                if not perm or perm["permission_type"] != "deny":
+                    allowed.append(ch)
+            elif atype == "whitelist":
+                # Must be explicitly allowed
+                perm = conn.execute(
+                    "SELECT permission_type FROM channel_permissions WHERE channel_id = ? AND user_id = ?",
+                    (cid, user_id),
+                ).fetchone()
+                if perm and perm["permission_type"] == "allow":
+                    allowed.append(ch)
+            elif atype == "blacklist":
+                perm = conn.execute(
+                    "SELECT permission_type FROM channel_permissions WHERE channel_id = ? AND user_id = ?",
+                    (cid, user_id),
+                ).fetchone()
+                if not perm or perm["permission_type"] != "deny":
+                    allowed.append(ch)
+        return allowed
+
+
+def can_user_access_channel(user_id: int, channel_id: int, is_admin: bool = False) -> bool:
+    if is_admin:
+        return True
+    visible = list_channels_for_user(user_id, is_admin=False)
+    return any(c["id"] == channel_id for c in visible)
+
+
+def can_user_post_in_channel(user_id: int, channel_id: int, is_admin: bool = False) -> tuple[bool, str]:
+    if not can_user_access_channel(user_id, channel_id, is_admin):
+        return False, "No tienes acceso a este tablón."
+    ch = get_channel(channel_id)
+    if not ch:
+        return False, "Tablón no encontrado."
+    if ch.get("is_announcement") and not is_admin:
+        return False, "Este tablón es de solo lectura (anuncios)."
+    return True, ""
+
+
+def admin_set_channel_visibility(
+    channel_id: int,
+    access_type: str,
+    user_ids: list[int],
+    permission_type: str = "allow",
+    is_announcement: Optional[bool] = None,
+) -> dict[str, Any]:
+    with get_conn() as conn:
+        ch = conn.execute("SELECT * FROM channels WHERE id = ?", (channel_id,)).fetchone()
+        if not ch:
+            raise ValueError("Tablón no encontrado.")
+
+        updates = ["access_type = ?"]
+        params: list[Any] = [access_type]
+        if is_announcement is not None:
+            updates.append("is_announcement = ?")
+            params.append(1 if is_announcement else 0)
+        params.append(channel_id)
+
+        conn.execute(f"UPDATE channels SET {', '.join(updates)} WHERE id = ?", params)
+        conn.execute("DELETE FROM channel_permissions WHERE channel_id = ?", (channel_id,))
+
+        now = time.time()
+        for uid in user_ids:
+            conn.execute(
+                "INSERT INTO channel_permissions (channel_id, user_id, permission_type, created_at) VALUES (?, ?, ?, ?)",
+                (channel_id, uid, permission_type, now),
+            )
+
+        updated = conn.execute("SELECT * FROM channels WHERE id = ?", (channel_id,)).fetchone()
+        return dict(updated)
+
+
+def admin_pin_message(channel_id: int, message_id: Optional[int]) -> dict[str, Any]:
+    with get_conn() as conn:
+        conn.execute("UPDATE channels SET pinned_message_id = ? WHERE id = ?", (message_id, channel_id))
+        ch = conn.execute("SELECT * FROM channels WHERE id = ?", (channel_id,)).fetchone()
+        return dict(ch) if ch else {}
+
+
+def get_channel_permissions(channel_id: int) -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT user_id, permission_type FROM channel_permissions WHERE channel_id = ?",
+            (channel_id,),
+        ).fetchall()
         return [dict(r) for r in rows]
 
 
@@ -283,6 +408,7 @@ def _format_channel_row(
         "is_hd": bool(r["is_hd"]),
         "expires_at": r["expires_at"],
         "is_expired": bool(r["is_expired"]),
+        "is_nsfw": bool(r["is_nsfw"]),
         "reply_to_id": r["reply_to_id"],
         "reply_preview": reply_preview,
         "reactions": reactions,
@@ -306,6 +432,7 @@ def create_channel_message(
     image_dims: Optional[str] = None,
     is_hd: bool = False,
     expires_at: Optional[float] = None,
+    is_nsfw: bool = False,
     reply_to_id: Optional[int] = None,
 ) -> int:
     now = time.time()
@@ -319,8 +446,8 @@ def create_channel_message(
             INSERT INTO messages (
                 channel_id, user_id, author_alias_snapshot, is_system, content,
                 image_url, image_name, image_size_kb, image_dims,
-                is_hd, expires_at, is_expired, reply_to_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                is_hd, expires_at, is_expired, is_nsfw, reply_to_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
             """,
             (
                 channel_id,
@@ -334,6 +461,7 @@ def create_channel_message(
                 image_dims,
                 1 if is_hd else 0,
                 expires_at,
+                1 if is_nsfw else 0,
                 reply_to_id,
                 now,
             ),
@@ -800,6 +928,7 @@ def _format_dm_row(
         "is_hd": bool(r["is_hd"]),
         "expires_at": r["expires_at"],
         "is_expired": bool(r["is_expired"]),
+        "is_nsfw": bool(r["is_nsfw"]),
         "reply_to_id": r["reply_to_id"],
         "reply_preview": reply_preview,
         "reactions": reactions,

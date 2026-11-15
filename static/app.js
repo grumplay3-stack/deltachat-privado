@@ -653,7 +653,38 @@
     }
     const resp = await apiFetch(url);
     const data = await resp.json();
-    state.messages = data.messages || [];
+    let msgs = data.messages || [];
+    if (onlyMediaFilter) {
+      msgs = msgs.filter((m) => Boolean(m.image_url));
+    }
+    state.messages = msgs;
+
+    // Handle channel pinned message
+    const pinnedBar = $("channel-pinned-bar");
+    const pinnedText = $("channel-pinned-text");
+    const unpinBtn = $("btn-unpin-msg");
+    const chInfo = data.channel;
+    if (chInfo && chInfo.pinned_message_id) {
+      const pinMsg = (data.messages || []).find((x) => x.id === chInfo.pinned_message_id);
+      if (pinMsg) {
+        pinnedText.textContent = `No.${pinMsg.id} (${pinMsg.alias}): ${pinMsg.content || pinMsg.image_name || "Foto"}`;
+        pinnedBar.classList.remove("hidden");
+        unpinBtn.classList.toggle("hidden", state.user && state.user.role !== "admin");
+        unpinBtn.onclick = async () => {
+          await apiFetch(`/api/admin/channels/${chInfo.id}/pin`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message_id: null }),
+          });
+          loadCurrentMessages();
+        };
+      } else {
+        pinnedBar.classList.add("hidden");
+      }
+    } else {
+      pinnedBar.classList.add("hidden");
+    }
+
     if (state.activeMode === "dm" && data.friend) {
       state.activeDmMeta = data.friend;
     } else {
@@ -704,6 +735,9 @@
     const modBadge = m.author_role === "admin" ? `<span class="post-admin-badge">## Admin</span>` : "";
 
     let actionsHtml = `<button type="button" class="btn-mini btn-quote" title="Citar mensaje">[Responder]</button>`;
+    if (isAdminViewer && state.activeMode === "channel") {
+      actionsHtml += `<button type="button" class="btn-mini btn-pin-post" title="Fijar en el tablón">[📌 Fijar]</button>`;
+    }
     if (canDelete) {
       actionsHtml += `<button type="button" class="btn-mini btn-delete" title="Borrar mensaje">[Borrar]</button>`;
     }
@@ -727,14 +761,31 @@
       const hdBadge = m.is_hd && m.expires_at
         ? `<span class="hd-badge" data-hd-expires="${m.expires_at}">⏳ HD: --:--</span>`
         : "";
+      const nsfwBadge = m.is_nsfw
+        ? `<span class="hd-badge" style="background:#5a2323;color:#ff9e9e;border-color:#8e3838;">🔞 +18 / NSFW</span>`
+        : "";
       fileHeaderHtml = `
         <div class="post-file-info">
           <span>File: <a href="${escapeHtml(m.image_url)}" download="${escapeHtml(m.image_name || "imagen.webp")}">${escapeHtml(m.image_name || "imagen.webp")}</a> (${m.image_size_kb || "?"} KB, ${escapeHtml(m.image_dims || "")})</span>
           <a href="${escapeHtml(m.image_url)}" download="${escapeHtml(m.image_name || "imagen.webp")}" class="btn-mini">[⬇ Descargar]</a>
           ${hdBadge}
+          ${nsfwBadge}
         </div>
       `;
-      thumbHtml = `<img src="${escapeHtml(m.image_url)}" alt="${escapeHtml(m.image_name || "Imagen")}" class="post-thumb" loading="lazy" />`;
+
+      if (m.is_nsfw) {
+        thumbHtml = `
+          <div class="nsfw-wrap" title="Haz click para revelar contenido +18">
+            <img src="${escapeHtml(m.image_url)}" alt="${escapeHtml(m.image_name || "Imagen")}" class="post-thumb" loading="lazy" />
+            <div class="nsfw-overlay">
+              <span>🔞 CONTENIDO +18</span>
+              <span class="mono-sm">[ Click para ver ]</span>
+            </div>
+          </div>
+        `;
+      } else {
+        thumbHtml = `<img src="${escapeHtml(m.image_url)}" alt="${escapeHtml(m.image_name || "Imagen")}" class="post-thumb" loading="lazy" />`;
+      }
     }
 
     // Reactions
@@ -788,6 +839,19 @@
       }
     });
 
+    const pinBtn = article.querySelector(".btn-pin-post");
+    if (pinBtn) {
+      pinBtn.addEventListener("click", async () => {
+        if (!state.activeChannelId) return;
+        await apiFetch(`/api/admin/channels/${state.activeChannelId}/pin`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message_id: m.id }),
+        });
+        loadCurrentMessages();
+      });
+    }
+
     const delBtn = article.querySelector(".btn-delete");
     if (delBtn) {
       delBtn.addEventListener("click", async () => {
@@ -804,9 +868,20 @@
       });
     }
 
+    const nsfwWrap = article.querySelector(".nsfw-wrap");
+    if (nsfwWrap) {
+      nsfwWrap.addEventListener("click", (e) => {
+        if (!nsfwWrap.classList.contains("revealed")) {
+          e.stopPropagation();
+          nsfwWrap.classList.add("revealed");
+        }
+      });
+    }
+
     const thumbEl = article.querySelector(".post-thumb");
     if (thumbEl) {
-      thumbEl.addEventListener("click", () => {
+      thumbEl.addEventListener("click", (e) => {
+        if (nsfwWrap && !nsfwWrap.classList.contains("revealed")) return;
         openLightbox(m.image_url, m.image_name, m.image_size_kb, m.image_dims);
       });
     }
@@ -998,6 +1073,7 @@
     state.pendingFile = null;
     fileInput.value = "";
     chkHdMode.checked = false;
+    $("chk-nsfw-mode").checked = false;
     imagePreviewBar.classList.add("hidden");
   }
 
@@ -1012,6 +1088,7 @@
     let uploadedMeta = null;
     if (state.pendingFile) {
       const isHd = chkHdMode.checked;
+      const isNsfw = $("chk-nsfw-mode").checked;
       const maxBytes = isHd ? 15 * 1024 * 1024 : 5 * 1024 * 1024;
       if (state.pendingFile.size > maxBytes) {
         alert(`La imagen supera el límite de ${isHd ? 15 : 5} MB.`);
@@ -1020,6 +1097,7 @@
       const fd = new FormData();
       fd.append("file", state.pendingFile);
       fd.append("is_hd", isHd ? "true" : "false");
+      fd.append("is_nsfw", isNsfw ? "true" : "false");
       try {
         const resp = await apiFetch("/api/upload", { method: "POST", body: fd });
         uploadedMeta = await resp.json();
@@ -1069,7 +1147,14 @@
     );
   }
 
-  // --- SEARCH ---
+  // --- SEARCH & FILTER ---
+  let onlyMediaFilter = false;
+  $("btn-filter-media").addEventListener("click", () => {
+    onlyMediaFilter = !onlyMediaFilter;
+    $("btn-filter-media").classList.toggle("active", onlyMediaFilter);
+    loadCurrentMessages();
+  });
+
   searchInput.addEventListener("input", () => {
     clearTimeout(state.searchTimeout);
     state.searchTimeout = setTimeout(() => {
@@ -1128,6 +1213,14 @@
       if (data.type === "users_updated") {
         loadUsers();
         loadSidebarSocial();
+        return;
+      }
+
+      if (data.type === "channels_updated") {
+        loadChannels();
+        if (state.activeMode === "channel") {
+          loadCurrentMessages();
+        }
         return;
       }
 
@@ -1355,6 +1448,7 @@
       const target = btn.dataset.atab;
       document.querySelectorAll(".admin-pane").forEach((p) => p.classList.add("hidden"));
       $(`atab-${target}`).classList.remove("hidden");
+      if (target === "channels") loadAdminChannelsSettings();
       if (target === "dms") loadAdminDmThreads();
       if (target === "audit") loadAdminAudit();
       if (target === "backups") {
@@ -1362,6 +1456,87 @@
         loadAdminUsersBackups();
       }
     });
+  });
+
+  // --- ADMIN CANALES & VISIBILIDAD ---
+  let adminAllChannels = [];
+  async function loadAdminChannelsSettings() {
+    const [chResp, uResp] = await Promise.all([
+      apiFetch("/api/admin/channels"),
+      apiFetch("/api/admin/database/users"),
+    ]);
+    const chData = await chResp.json();
+    const uData = await uResp.json();
+    adminAllChannels = chData.channels || [];
+    const allUsers = (uData.users || []).filter((u) => u.role !== "admin");
+
+    const sel = $("admin-channel-select");
+    sel.innerHTML = "";
+    adminAllChannels.forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = String(c.id);
+      opt.textContent = `/${c.slug}/ - ${c.name} (${c.access_type || "public"})`;
+      sel.appendChild(opt);
+    });
+
+    const updateFormForChannel = () => {
+      const cid = parseInt(sel.value, 10);
+      const ch = adminAllChannels.find((x) => x.id === cid);
+      if (!ch) return;
+      $("admin-channel-access-type").value = ch.access_type || "public";
+      $("admin-channel-announcement").checked = Boolean(ch.is_announcement);
+
+      const permsMap = new Map((ch.permissions || []).map((p) => [p.user_id, p.permission_type]));
+      const checklist = $("admin-channel-users-checklist");
+      checklist.innerHTML = "";
+      if (allUsers.length === 0) {
+        checklist.innerHTML = `<span class="mono-sm">No hay usuarios miembros registrados.</span>`;
+        return;
+      }
+      allUsers.forEach((u) => {
+        const lbl = document.createElement("label");
+        lbl.className = "user-check-item";
+        const isChecked = permsMap.has(u.id);
+        lbl.innerHTML = `
+          <input type="checkbox" value="${u.id}" ${isChecked ? "checked" : ""} />
+          <span>${escapeHtml(u.alias)} (@${escapeHtml(u.username)})</span>
+        `;
+        checklist.appendChild(lbl);
+      });
+    };
+
+    sel.onchange = updateFormForChannel;
+    updateFormForChannel();
+  }
+
+  $("admin-channel-perm-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const sel = $("admin-channel-select");
+    const cid = parseInt(sel.value, 10);
+    const accessType = $("admin-channel-access-type").value;
+    const isAnnounce = $("admin-channel-announcement").checked;
+
+    const checkedBoxes = $("admin-channel-users-checklist").querySelectorAll("input[type='checkbox']:checked");
+    const userIds = Array.from(checkedBoxes).map((cb) => parseInt(cb.value, 10));
+    const permType = accessType === "blacklist" ? "deny" : "allow";
+
+    try {
+      await apiFetch(`/api/admin/channels/${cid}/visibility`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_type: accessType,
+          user_ids: userIds,
+          permission_type: permType,
+          is_announcement: isAnnounce,
+        }),
+      });
+      alert("Configuración de visibilidad del tablón guardada.");
+      await loadChannels();
+      await loadAdminChannelsSettings();
+    } catch (err) {
+      alert(err.message);
+    }
   });
 
   $("admin-db-search").addEventListener("input", () => {

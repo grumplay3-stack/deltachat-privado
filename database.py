@@ -101,6 +101,7 @@ def init_db() -> None:
                 is_hd INTEGER NOT NULL DEFAULT 0,
                 expires_at REAL,
                 is_expired INTEGER NOT NULL DEFAULT 0,
+                is_nsfw INTEGER NOT NULL DEFAULT 0,
                 reply_to_id INTEGER,
                 is_read INTEGER NOT NULL DEFAULT 0,
                 created_at REAL NOT NULL
@@ -133,10 +134,12 @@ def init_db() -> None:
             """
         )
 
-        # Ensure is_read column exists on pre-existing direct_messages table
+        # Ensure is_read and is_nsfw columns exist on pre-existing direct_messages table
         dm_cols = {r["name"] for r in conn.execute("PRAGMA table_info(direct_messages)").fetchall()}
         if "is_read" not in dm_cols:
             conn.execute("ALTER TABLE direct_messages ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0")
+        if "is_nsfw" not in dm_cols:
+            conn.execute("ALTER TABLE direct_messages ADD COLUMN is_nsfw INTEGER NOT NULL DEFAULT 0")
 
         # Migrate channels table schema if missing access_type
         ch_cols = {r["name"] for r in conn.execute("PRAGMA table_info(channels)").fetchall()}
@@ -408,7 +411,7 @@ def _format_channel_row(
         "is_hd": bool(r["is_hd"]),
         "expires_at": r["expires_at"],
         "is_expired": bool(r["is_expired"]),
-        "is_nsfw": bool(r["is_nsfw"]),
+        "is_nsfw": bool(r["is_nsfw"]) if "is_nsfw" in r.keys() else False,
         "reply_to_id": r["reply_to_id"],
         "reply_preview": reply_preview,
         "reactions": reactions,
@@ -928,7 +931,7 @@ def _format_dm_row(
         "is_hd": bool(r["is_hd"]),
         "expires_at": r["expires_at"],
         "is_expired": bool(r["is_expired"]),
-        "is_nsfw": bool(r["is_nsfw"]),
+        "is_nsfw": bool(r["is_nsfw"]) if "is_nsfw" in r.keys() else False,
         "reply_to_id": r["reply_to_id"],
         "reply_preview": reply_preview,
         "reactions": reactions,

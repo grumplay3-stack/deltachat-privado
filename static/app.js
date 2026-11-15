@@ -42,7 +42,97 @@
     reconnectTimer: null,
     searchTimeout: null,
     hdTimerInterval: null,
+    xatRosterTab: "visitors", // "visitors" | "friends"
   };
+
+  // --- CATÁLOGO DE EMOJIS ICONICOS XAT (3D GLOSS) ---
+  const XAT_SMILEYS = {
+    smile: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><ellipse cx="11.5" cy="13.5" rx="1.8" ry="2.6" fill="#1a1a1a"/><circle cx="11" cy="12.5" r="0.8" fill="#ffffff"/><ellipse cx="20.5" cy="13.5" rx="1.8" ry="2.6" fill="#1a1a1a"/><circle cx="20" cy="12.5" r="0.8" fill="#ffffff"/><path d="M10 18.5 Q16 25 22 18.5" fill="none" stroke="#682a00" stroke-width="2" stroke-linecap="round"/>`,
+    biggrin: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><path d="M9.5 13.5 Q12 11 14.5 13.5" fill="none" stroke="#682a00" stroke-width="2.2" stroke-linecap="round"/><path d="M17.5 13.5 Q20 11 22.5 13.5" fill="none" stroke="#682a00" stroke-width="2.2" stroke-linecap="round"/><path d="M8.5 17 Q16 19 23.5 17 C22.5 25.5 9.5 25.5 8.5 17 Z" fill="#ffffff" stroke="#682a00" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 17 Q16 18.8 23.5 17" fill="none" stroke="#682a00" stroke-width="1.2"/><path d="M16 18.2 L16 24.2" stroke="#682a00" stroke-width="0.9" opacity="0.6"/>`,
+    wink: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><path d="M9 13.5 Q11.5 11 14 13.5" fill="none" stroke="#682a00" stroke-width="2.2" stroke-linecap="round"/><ellipse cx="20.5" cy="13.5" rx="1.8" ry="2.6" fill="#1a1a1a"/><circle cx="20" cy="12.5" r="0.8" fill="#ffffff"/><path d="M11 18.5 Q16 24.5 22 18.5" fill="none" stroke="#682a00" stroke-width="2" stroke-linecap="round"/>`,
+    tongue: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><ellipse cx="11.5" cy="13.5" rx="1.8" ry="2.6" fill="#1a1a1a"/><circle cx="11" cy="12.5" r="0.8" fill="#ffffff"/><ellipse cx="20.5" cy="13.5" rx="1.8" ry="2.6" fill="#1a1a1a"/><circle cx="20" cy="12.5" r="0.8" fill="#ffffff"/><path d="M9.5 17.5 Q16 19.5 22.5 17.5" fill="none" stroke="#682a00" stroke-width="2" stroke-linecap="round"/><path d="M12.5 18 C12.5 24 19.5 24 19.5 18 Z" fill="#e91e63" stroke="#880e4f" stroke-width="1.2"/><path d="M16 18.5 L16 22.5" stroke="#880e4f" stroke-width="0.8"/>`,
+    cool: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><path d="M6.5 11.5 L15 11.5 C15.5 16.5 9 17 6.5 13.5 Z" fill="#14171c" stroke="#000" stroke-width="1"/><path d="M17 11.5 L25.5 11.5 C25.5 13.5 23 17 16.5 16.5 Z" fill="#14171c" stroke="#000" stroke-width="1"/><path d="M14 12 L18 12" stroke="#14171c" stroke-width="2"/><path d="M8.5 12.5 L12 15.5" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" opacity="0.8"/><path d="M19 12.5 L22.5 15.5" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" opacity="0.8"/><path d="M12 21 Q16.5 21.5 21 19.5" fill="none" stroke="#682a00" stroke-width="2" stroke-linecap="round"/>`,
+    mad: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-red)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.4" transform="rotate(-18 12 8.5)"/><path d="M7.5 11 L14 14" stroke="#1a0505" stroke-width="2.4" stroke-linecap="round"/><path d="M24.5 11 L18 14" stroke="#1a0505" stroke-width="2.4" stroke-linecap="round"/><ellipse cx="11.5" cy="15.5" rx="1.6" ry="2" fill="#1a0505"/><circle cx="12" cy="15" r="0.6" fill="#ffffff"/><ellipse cx="20.5" cy="15.5" rx="1.6" ry="2" fill="#1a0505"/><circle cx="20" cy="15" r="0.6" fill="#ffffff"/><path d="M10 23.5 Q16 17.5 22 23.5" fill="none" stroke="#1a0505" stroke-width="2.2" stroke-linecap="round"/>`,
+    redface: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><ellipse cx="11.5" cy="13.5" rx="1.8" ry="2.6" fill="#1a1a1a"/><circle cx="11" cy="12.5" r="0.8" fill="#ffffff"/><ellipse cx="20.5" cy="13.5" rx="1.8" ry="2.6" fill="#1a1a1a"/><circle cx="20" cy="12.5" r="0.8" fill="#ffffff"/><circle cx="8" cy="18" r="3.5" fill="#e91e63" fill-opacity="0.45" filter="url(#xat-blur-blush)"/><circle cx="24" cy="18" r="3.5" fill="#e91e63" fill-opacity="0.45" filter="url(#xat-blur-blush)"/><path d="M12 19.5 Q16 23.5 20 19.5" fill="none" stroke="#682a00" stroke-width="1.8" stroke-linecap="round"/>`,
+    confused: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><ellipse cx="11" cy="13" rx="2" ry="2.8" fill="#1a1a1a"/><circle cx="10.5" cy="12" r="0.8" fill="#ffffff"/><ellipse cx="21" cy="14" rx="1.4" ry="2.2" fill="#1a1a1a"/><circle cx="20.8" cy="13.2" r="0.6" fill="#ffffff"/><path d="M10 20.5 Q13 17 16 20.5 T22 20" fill="none" stroke="#682a00" stroke-width="2" stroke-linecap="round"/>`,
+    cry: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><ellipse cx="11.5" cy="13.5" rx="1.8" ry="2.6" fill="#1a1a1a"/><circle cx="11" cy="12.5" r="0.8" fill="#ffffff"/><ellipse cx="20.5" cy="13.5" rx="1.8" ry="2.6" fill="#1a1a1a"/><circle cx="20" cy="12.5" r="0.8" fill="#ffffff"/><path d="M11 22 Q16 17.5 21 22" fill="none" stroke="#682a00" stroke-width="2" stroke-linecap="round"/><path d="M22 17 C22 17 24.5 20.5 24.5 22.2 C24.5 23.8 23.2 25 21.8 25 C20.3 25 19 23.8 19 22.2 C19 20.5 22 17 22 17 Z" fill="#00b0ff" stroke="#0277bd" stroke-width="0.8"/>`,
+    eek: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><path d="M8.5 9 Q11.5 7 14.5 9" fill="none" stroke="#682a00" stroke-width="1.8" stroke-linecap="round"/><path d="M17.5 9 Q20.5 7 23.5 9" fill="none" stroke="#682a00" stroke-width="1.8" stroke-linecap="round"/><circle cx="11.5" cy="13.5" r="2.5" fill="#1a1a1a"/><circle cx="11" cy="12.5" r="1" fill="#ffffff"/><circle cx="20.5" cy="13.5" r="2.5" fill="#1a1a1a"/><circle cx="20" cy="12.5" r="1" fill="#ffffff"/><ellipse cx="16" cy="21.5" rx="4" ry="5.5" fill="#2d1300" stroke="#682a00" stroke-width="1.5"/>`,
+    "8ball": `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-black)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.35" transform="rotate(-18 12 8.5)"/><circle cx="16" cy="16" r="6" fill="#ffffff"/><text x="16" y="19" font-family="Arial, sans-serif" font-weight="900" font-size="9" fill="#000000" text-anchor="middle">8</text>`,
+    party: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><polygon points="6,9 13,2 17,10" fill="#e91e63" stroke="#880e4f" stroke-width="0.8"/><path d="M8 8 L15 3.5" stroke="#ffeb3b" stroke-width="1.2"/><path d="M10 10 L16 5.5" stroke="#00e676" stroke-width="1.2"/><circle cx="13" cy="2" r="1.5" fill="#ffd700"/><path d="M9.5 14 Q12 12 14.5 14" fill="none" stroke="#682a00" stroke-width="1.8" stroke-linecap="round"/><path d="M17.5 14 Q20 12 22.5 14" fill="none" stroke="#682a00" stroke-width="1.8" stroke-linecap="round"/><path d="M14 20 L27 18 L27 21 L14 21 Z" fill="#ff9100" stroke="#e65100" stroke-width="0.8"/><circle cx="27" cy="19.5" r="2.2" fill="#00e5ff"/>`,
+    crying: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><path d="M9 13 Q11.5 15.5 14 13" fill="none" stroke="#682a00" stroke-width="2.2" stroke-linecap="round"/><path d="M18 13 Q20.5 15.5 23 13" fill="none" stroke="#682a00" stroke-width="2.2" stroke-linecap="round"/><path d="M10 14.5 L10 27" stroke="#00b0ff" stroke-width="2.6" stroke-linecap="round"/><path d="M22 14.5 L22 27" stroke="#00b0ff" stroke-width="2.6" stroke-linecap="round"/><path d="M11 20 Q16 18 21 20 C20 26 12 26 11 20 Z" fill="#2d1300" stroke="#682a00" stroke-width="1"/>`,
+    roll: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><circle cx="11.5" cy="12.5" r="3" fill="#ffffff" stroke="#682a00" stroke-width="0.8"/><circle cx="11.5" cy="10.8" r="1.4" fill="#1a1a1a"/><circle cx="20.5" cy="12.5" r="3" fill="#ffffff" stroke="#682a00" stroke-width="0.8"/><circle cx="20.5" cy="10.8" r="1.4" fill="#1a1a1a"/><path d="M11 20 L21 19.5" stroke="#682a00" stroke-width="2" stroke-linecap="round"/>`,
+    sleepy: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><path d="M9 13.5 Q11.5 16 14 13.5" fill="none" stroke="#682a00" stroke-width="2" stroke-linecap="round"/><path d="M18 13.5 Q20.5 16 23 13.5" fill="none" stroke="#682a00" stroke-width="2" stroke-linecap="round"/><ellipse cx="16" cy="20" rx="2.5" ry="3" fill="#2d1300" stroke="#682a00" stroke-width="1"/><text x="21" y="9" font-family="Arial, sans-serif" font-weight="900" font-size="7" fill="#00b0ff">Z</text><text x="25" y="6" font-family="Arial, sans-serif" font-weight="900" font-size="5" fill="#40c4ff">z</text>`,
+    kiss: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><path d="M9.5 13.5 Q12 11 14.5 13.5" fill="none" stroke="#682a00" stroke-width="2" stroke-linecap="round"/><path d="M17.5 13.5 Q20 11 22.5 13.5" fill="none" stroke="#682a00" stroke-width="2" stroke-linecap="round"/><path d="M14 18.5 Q16 17 18 18.5 Q16 20 14 18.5 Z" fill="#e91e63" stroke="#880e4f" stroke-width="0.9"/><path d="M24 10 C24 8.5 22.5 8.5 22.5 10 C22.5 8.5 21 8.5 21 10 C21 11.5 22.5 13 22.5 13 C22.5 13 24 11.5 24 10 Z" fill="#ff1744"/>`,
+    angel: `<ellipse cx="16" cy="4" rx="8" ry="2.2" fill="none" stroke="#ffd700" stroke-width="2"/><circle cx="16" cy="17" r="13" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="10" rx="5" ry="2.8" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 10)"/><ellipse cx="11.5" cy="14.5" rx="1.6" ry="2.4" fill="#1a1a1a"/><circle cx="11" cy="13.5" r="0.7" fill="#ffffff"/><ellipse cx="20.5" cy="14.5" rx="1.6" ry="2.4" fill="#1a1a1a"/><circle cx="20" cy="13.5" r="0.7" fill="#ffffff"/><path d="M11 19.5 Q16 24.5 21 19.5" fill="none" stroke="#682a00" stroke-width="1.8" stroke-linecap="round"/>`,
+    evil: `<polygon points="7,10 4,2 10,5" fill="#d50000" stroke="#b71c1c" stroke-width="0.8"/><polygon points="25,10 28,2 22,5" fill="#d50000" stroke="#b71c1c" stroke-width="0.8"/><circle cx="16" cy="16" r="14" fill="url(#xat-grad-purple)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.35" transform="rotate(-18 12 8.5)"/><path d="M8 11.5 L14 14.5" stroke="#100020" stroke-width="2.2" stroke-linecap="round"/><path d="M24 11.5 L18 14.5" stroke="#100020" stroke-width="2.2" stroke-linecap="round"/><ellipse cx="11.5" cy="15.5" rx="1.6" ry="2.2" fill="#100020"/><circle cx="12" cy="15" r="0.6" fill="#ffeb3b"/><ellipse cx="20.5" cy="15.5" rx="1.6" ry="2.2" fill="#100020"/><circle cx="20" cy="15" r="0.6" fill="#ffeb3b"/><path d="M10 20 Q16 26 22 20" fill="none" stroke="#100020" stroke-width="2.2" stroke-linecap="round"/>`,
+    heart: `<path d="M16 27 C16 27, 4 19, 4 10 C4 5.5, 8 2.5, 12.5 2.5 C14.5 2.5, 16 4, 16 4 C16 4, 17.5 2.5, 19.5 2.5 C24 2.5, 28 5.5, 28 10 C28 19, 16 27, 16 27 Z" fill="url(#xat-grad-heart)"/><path d="M7 8 C7 5.5, 9.5 4.5, 12 5" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.75"/>`,
+    fire: `<path d="M16 2 C18 6 25 11 25 19 C25 25 21 29 16 29 C11 29 7 25 7 19 C7 11 14 6 16 2 Z" fill="url(#xat-grad-fire)"/><path d="M16 12 C18 15 21 17 21 21 C21 24.5 19 27 16 27 C13 27 11 24.5 11 21 C11 17 14 15 16 12 Z" fill="#ffff8d"/>`,
+    music: `<path d="M10 8 L24 4 L24 17 C22.5 16 20 16.5 19 18 C17.8 19.5 18.5 22 20.5 22.8 C22.5 23.5 25 22 25 19.5 L25 2 L9 6 L9 20 C7.5 19 5 19.5 4 21 C2.8 22.5 3.5 25 5.5 25.8 C7.5 26.5 10 25 10 22.5 Z" fill="url(#xat-grad-music)"/>`,
+    nerd: `<circle cx="16" cy="16" r="14" fill="url(#xat-grad-yellow)"/><ellipse cx="12" cy="8.5" rx="5.5" ry="3" fill="#ffffff" fill-opacity="0.6" transform="rotate(-18 12 8.5)"/><circle cx="11" cy="13.5" r="4.2" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.4"/><circle cx="21" cy="13.5" r="4.2" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.4"/><circle cx="11.5" cy="13.5" r="1.6" fill="#1a1a1a"/><circle cx="21.5" cy="13.5" r="1.6" fill="#1a1a1a"/><rect x="14.5" y="12.5" width="3" height="2" fill="#ffffff" stroke="#1a1a1a" stroke-width="0.8"/><path d="M11 20 Q16 23.5 21 20" fill="none" stroke="#682a00" stroke-width="1.8"/><rect x="14" y="21" width="1.8" height="2.5" fill="#ffffff" stroke="#682a00" stroke-width="0.6"/><rect x="16.2" y="21" width="1.8" height="2.5" fill="#ffffff" stroke="#682a00" stroke-width="0.6"/>`
+  };
+
+  const XAT_PAWNS = {
+    admin: `<polygon points="6,5 8,1 12,4 16,1 18,5" fill="#ffe082" stroke="#ff8f00" stroke-width="0.8"/><circle cx="12" cy="7.5" r="4.8" fill="url(#pawn-gold-grad)" stroke="#3e2723" stroke-width="0.8"/><ellipse cx="12" cy="12.5" rx="4.5" ry="1.4" fill="url(#pawn-gold-grad)" stroke="#3e2723" stroke-width="0.8"/><path d="M9 13.5 C9 17 6.5 20.5 5.5 22.5 L18.5 22.5 C17.5 20.5 15 17 15 13.5 Z" fill="url(#pawn-gold-grad)" stroke="#3e2723" stroke-width="0.8"/><path d="M4 23 C4 22 20 22 20 23 L21 26 C21 27 3 27 3 26 Z" fill="url(#pawn-gold-grad)" stroke="#3e2723" stroke-width="0.8"/>`,
+    green: `<circle cx="12" cy="7.5" r="4.8" fill="url(#pawn-green-grad)" stroke="#003311" stroke-width="0.8"/><ellipse cx="12" cy="12.5" rx="4.5" ry="1.4" fill="url(#pawn-green-grad)" stroke="#003311" stroke-width="0.8"/><path d="M9 13.5 C9 17 6.5 20.5 5.5 22.5 L18.5 22.5 C17.5 20.5 15 17 15 13.5 Z" fill="url(#pawn-green-grad)" stroke="#003311" stroke-width="0.8"/><path d="M4 23 C4 22 20 22 20 23 L21 26 C21 27 3 27 3 26 Z" fill="url(#pawn-green-grad)" stroke="#003311" stroke-width="0.8"/>`,
+    blue: `<circle cx="12" cy="7.5" r="4.8" fill="url(#pawn-blue-grad)" stroke="#001a33" stroke-width="0.8"/><ellipse cx="12" cy="12.5" rx="4.5" ry="1.4" fill="url(#pawn-blue-grad)" stroke="#001a33" stroke-width="0.8"/><path d="M9 13.5 C9 17 6.5 20.5 5.5 22.5 L18.5 22.5 C17.5 20.5 15 17 15 13.5 Z" fill="url(#pawn-blue-grad)" stroke="#001a33" stroke-width="0.8"/><path d="M4 23 C4 22 20 22 20 23 L21 26 C21 27 3 27 3 26 Z" fill="url(#pawn-blue-grad)" stroke="#001a33" stroke-width="0.8"/>`,
+    red: `<circle cx="12" cy="7.5" r="4.8" fill="url(#pawn-red-grad)" stroke="#330000" stroke-width="0.8"/><ellipse cx="12" cy="12.5" rx="4.5" ry="1.4" fill="url(#pawn-red-grad)" stroke="#330000" stroke-width="0.8"/><path d="M9 13.5 C9 17 6.5 20.5 5.5 22.5 L18.5 22.5 C17.5 20.5 15 17 15 13.5 Z" fill="url(#pawn-red-grad)" stroke="#330000" stroke-width="0.8"/><path d="M4 23 C4 22 20 22 20 23 L21 26 C21 27 3 27 3 26 Z" fill="url(#pawn-red-grad)" stroke="#330000" stroke-width="0.8"/>`,
+    white: `<circle cx="12" cy="7.5" r="4.8" fill="url(#pawn-gray-grad)" stroke="#1a202c" stroke-width="0.8"/><ellipse cx="12" cy="12.5" rx="4.5" ry="1.4" fill="url(#pawn-gray-grad)" stroke="#1a202c" stroke-width="0.8"/><path d="M9 13.5 C9 17 6.5 20.5 5.5 22.5 L18.5 22.5 C17.5 20.5 15 17 15 13.5 Z" fill="url(#pawn-gray-grad)" stroke="#1a202c" stroke-width="0.8"/><path d="M4 23 C4 22 20 22 20 23 L21 26 C21 27 3 27 3 26 Z" fill="url(#pawn-gray-grad)" stroke="#1a202c" stroke-width="0.8"/>`
+  };
+
+  function renderXatSmiley(code) {
+    const body = XAT_SMILEYS[code] || XAT_SMILEYS.smile;
+    return `<svg viewBox="0 0 32 32" class="xat-smiley" alt="(${code})" title="(${code})">${body}</svg>`;
+  }
+
+  function renderXatPawn(type) {
+    const body = XAT_PAWNS[type] || XAT_PAWNS.green;
+    return `<svg viewBox="0 0 24 28" class="xat-pawn" title="${type}">${body}</svg>`;
+  }
+
+  function getUserPawn(userId, role, username) {
+    if (role === "admin" || username === "dabo777") return renderXatPawn("admin");
+    const isFriend = (state.friendsData.friends || []).some((f) => f.user_id === userId);
+    if (isFriend) return renderXatPawn("blue");
+    if (userId) return renderXatPawn("green");
+    return renderXatPawn("red");
+  }
+
+  function parseXatSmileys(escapedText) {
+    if (!escapedText) return "";
+    let str = escapedText;
+    // Emoticones textuales clásicos -> etiquetas xat
+    str = str
+      .replace(/(^|[\s(]):-?D(?=[\s).,!?;]|$)/g, '$1(biggrin)')
+      .replace(/(^|[\s(]):-?\)(?=[\s).,!?;]|$)/g, '$1(smile)')
+      .replace(/(^|[\s(]);-?\)(?=[\s).,!?;]|$)/g, '$1(wink)')
+      .replace(/(^|[\s(]):-?[pP](?=[\s).,!?;]|$)/g, '$1(tongue)')
+      .replace(/(^|[\s(])(?:B|8)-?\)(?=[\s).,!?;]|$)/g, '$1(cool)')
+      .replace(/(^|[\s(])&gt;:-?\((?=[\s).,!?;]|$)/g, '$1(mad)')
+      .replace(/(^|[\s(]):-?\$|:\$(?=[\s).,!?;]|$)/g, '$1(redface)')
+      .replace(/(^|[\s(]):-?[sS](?=[\s).,!?;]|$)/g, '$1(confused)')
+      .replace(/(^|[\s(]):-?['’]\((?=[\s).,!?;]|$)/g, '$1(cry)')
+      .replace(/(^|[\s(]):-?[oO](?=[\s).,!?;]|$)/g, '$1(eek)')
+      .replace(/(^|[\s(]):-?\*(?=[\s).,!?;]|$)/g, '$1(kiss)')
+      .replace(/(^|[\s(])&lt;3(?=[\s).,!?;]|$)/g, '$1(heart)');
+
+    // Etiquetas xat (smile), (cool), etc. -> SVG
+    str = str.replace(/\((smile|biggrin|wink|tongue|cool|mad|redface|confused|cry|eek|8ball|party|crying|roll|sleepy|kiss|angel|evil|heart|fire|music|nerd)\)/gi, (match, tag) => {
+      const lower = tag.toLowerCase();
+      if (XAT_SMILEYS[lower]) {
+        return renderXatSmiley(lower);
+      }
+      return match;
+    });
+
+    return str;
+  }
+
+  function formatXatDate(unixSec) {
+    const d = new Date(unixSec * 1000);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mi}`;
+  }
 
   // --- DOM ELEMENTS ---
   const $ = (id) => document.getElementById(id);
@@ -106,9 +196,9 @@
         '<a class="quotelink" data-ref="$1">&gt;&gt;$1</a>'
       );
       if (line.startsWith("&gt;") && !line.startsWith("&gt;&gt;")) {
-        return `<span class="greentext">${formatted}</span>`;
+        return `<span class="greentext">${parseXatSmileys(formatted)}</span>`;
       }
-      return formatted;
+      return parseXatSmileys(formatted);
     });
     return lines.join("<br>");
   }
@@ -555,6 +645,7 @@
       });
       usersList.appendChild(li);
     });
+    renderXatRoster();
   }
 
   function updateDmBanners() {
@@ -725,7 +816,7 @@
     const canBan = isAdminViewer && m.user_id && m.user_id !== state.user.id && m.author_role !== "admin";
 
     const article = document.createElement("article");
-    article.className = "post";
+    article.className = "post xat-post";
     article.id = `post-${m.id}`;
 
     // Header
@@ -799,26 +890,37 @@
     }).join("");
 
     const canClickAuthor = Boolean(m.user_id && state.user && m.user_id !== state.user.id);
+    const authorPawnSvg = getUserPawn(m.user_id, m.author_role, m.username);
     const authorTagHtml = canClickAuthor
-      ? `<button type="button" class="post-alias post-author-btn" style="color:${escapeHtml(m.avatar_color)}" title="Opciones de amistad / DM">${escapeHtml(m.alias)}</button>`
-      : `<span class="post-alias" style="color:${escapeHtml(m.avatar_color)}">${escapeHtml(m.alias)}</span>`;
+      ? `<button type="button" class="post-alias post-author-btn xat-post-author" style="color:${escapeHtml(m.avatar_color)}" title="Opciones de amistad / DM">${authorPawnSvg}<span>${escapeHtml(m.alias)}</span></button>`
+      : `<span class="post-alias xat-post-author" style="color:${escapeHtml(m.avatar_color)}">${authorPawnSvg}<span>${escapeHtml(m.alias)}</span></span>`;
+
+    const shortTime = formatXatDate(m.created_at);
+    const fullDate = format4chanDate(m.created_at);
 
     article.innerHTML = `
-      <div class="post-header">
-        ${authorTagHtml}
-        ${modBadge}
-        ${adminUserInfo}
-        <span class="post-date">${format4chanDate(m.created_at)}</span>
-        <span class="post-no" title="Click para citar">No.${m.id}</span>
-        <div class="post-actions">${actionsHtml}</div>
+      <div class="xat-post-avatar-col">
+        <div class="xat-post-avatar-img" style="display:flex;align-items:center;justify-content:center;background:#151820;border-color:${escapeHtml(m.avatar_color || '#363d4f')}">
+          ${authorPawnSvg}
+        </div>
       </div>
-      ${replyHtml}
-      ${fileHeaderHtml}
-      <div class="post-body-wrap">
-        ${thumbHtml}
-        ${m.content ? `<div class="post-content">${formatPostContent(m.content)}</div>` : ""}
+      <div class="xat-post-content-col">
+        <div class="xat-post-header">
+          ${authorTagHtml}
+          ${modBadge}
+          ${adminUserInfo}
+          <span class="xat-post-time" title="${fullDate}">${shortTime}</span>
+          <span class="xat-post-no post-no" title="Click para citar">No.${m.id}</span>
+          <div class="xat-post-actions post-actions">${actionsHtml}</div>
+        </div>
+        ${replyHtml}
+        ${fileHeaderHtml}
+        <div class="xat-post-body">
+          ${thumbHtml}
+          ${m.content ? `<div class="post-content">${formatPostContent(m.content)}</div>` : ""}
+        </div>
+        <div class="post-reactions">${reactionButtonsHtml}</div>
       </div>
-      <div class="post-reactions">${reactionButtonsHtml}</div>
     `;
 
     // Event bindings inside post
@@ -2043,6 +2145,220 @@
     } catch {}
     forceLogout();
   });
+
+  // --- FUNCIONES XAT DARK (ROSTER, RIBBON Y CONTROLES) ---
+  const XAT_RIBBON_SMILEYS = [
+    "smile", "biggrin", "wink", "tongue", "cool",
+    "mad", "redface", "confused", "cry", "eek",
+    "8ball", "party", "crying", "heart", "fire", "music"
+  ];
+
+  function insertSmileyAtCursor(code) {
+    const tag = `(${code}) `;
+    const el = messageInput;
+    el.focus();
+    const start = el.selectionStart || el.value.length;
+    const end = el.selectionEnd || el.value.length;
+    el.value = el.value.substring(0, start) + tag + el.value.substring(end);
+    el.selectionStart = el.selectionEnd = start + tag.length;
+  }
+
+  function renderXatRoster() {
+    const rosterList = $("xat-roster-list");
+    const countEl = $("xat-online-count");
+    const mobileCountEl = $("mobile-online-count");
+    const headingEl = $("xat-roster-heading");
+    if (!rosterList) return;
+
+    rosterList.innerHTML = "";
+    const isFriendsTab = state.xatRosterTab === "friends";
+
+    if (isFriendsTab) {
+      const friends = state.friendsData.friends || [];
+      const onlineFriends = friends.filter((f) => state.onlineIds.has(f.user_id));
+      if (headingEl) headingEl.innerHTML = `Friends (<span>${friends.length}</span>)`;
+      if (countEl) countEl.textContent = String(onlineFriends.length);
+      if (mobileCountEl) mobileCountEl.textContent = String(onlineFriends.length);
+
+      if (friends.length === 0) {
+        rosterList.innerHTML = `<div class="mono-sm" style="padding:10px;text-align:center;color:var(--xat-text-muted);">Sin amigos aún. Agrega uno en la barra lateral.</div>`;
+        return;
+      }
+
+      friends.forEach((f) => {
+        const isOnline = state.onlineIds.has(f.user_id);
+        const pawnType = isOnline ? "blue" : "white";
+        const row = document.createElement("div");
+        row.className = "xat-roster-item" + (state.activeMode === "dm" && state.activeDmUserId === f.user_id ? " active" : "");
+        row.innerHTML = `
+          ${renderXatPawn(pawnType)}
+          <div class="xat-roster-item-info">
+            <span class="xat-roster-item-name" style="color:${escapeHtml(f.avatar_color || '#e2e8f0')}">${escapeHtml(f.alias)}</span>
+            <span class="xat-roster-item-sub">${isOnline ? "🟢 Online" : "⚫ Offline"}</span>
+          </div>
+        `;
+        row.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openAuthorPopover(row, { user_id: f.user_id, alias: f.alias, avatar_color: f.avatar_color, username: f.username });
+        });
+        rosterList.appendChild(row);
+      });
+      return;
+    }
+
+    // Pestaña Visitors: lista los usuarios ordenando online primero
+    const users = state.users || [];
+    const onlineList = [];
+    const offlineList = [];
+    users.forEach((u) => {
+      if (state.onlineIds.has(u.id) || u.online) {
+        onlineList.push(u);
+      } else {
+        offlineList.push(u);
+      }
+    });
+
+    const totalOnline = onlineList.length;
+    if (headingEl) headingEl.innerHTML = `Visitors (<span>${totalOnline}</span>)`;
+    if (countEl) countEl.textContent = String(totalOnline);
+    if (mobileCountEl) mobileCountEl.textContent = String(totalOnline);
+
+    const fullList = [...onlineList, ...offlineList];
+    if (fullList.length === 0) {
+      rosterList.innerHTML = `<div class="mono-sm" style="padding:10px;text-align:center;color:var(--xat-text-muted);">Sin visitantes.</div>`;
+      return;
+    }
+
+    const friendsSet = new Set((state.friendsData.friends || []).map((f) => f.user_id));
+
+    fullList.forEach((u) => {
+      const isOnline = state.onlineIds.has(u.id) || u.online;
+      let pawnType = "red";
+      if (u.role === "admin" || u.username === "dabo777") {
+        pawnType = "admin";
+      } else if (friendsSet.has(u.id)) {
+        pawnType = isOnline ? "blue" : "white";
+      } else if (isOnline) {
+        pawnType = "green";
+      } else {
+        pawnType = "white";
+      }
+
+      const row = document.createElement("div");
+      row.className = "xat-roster-item" + (state.activeMode === "dm" && state.activeDmUserId === u.id ? " active" : "");
+      row.innerHTML = `
+        ${renderXatPawn(pawnType)}
+        <div class="xat-roster-item-info">
+          <span class="xat-roster-item-name" style="color:${escapeHtml(u.avatar_color || '#e2e8f0')}">${escapeHtml(u.alias || u.username)}</span>
+          <span class="xat-roster-item-sub">${isOnline ? "🟢 Online" : "⚫ Offline"}${u.role === "admin" ? " · 👑 Admin" : ""}</span>
+        </div>
+      `;
+      row.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openAuthorPopover(row, { user_id: u.id, alias: u.alias, avatar_color: u.avatar_color, username: u.username, author_role: u.role });
+      });
+      rosterList.appendChild(row);
+    });
+  }
+
+  function initXatSmileysRibbon() {
+    const ribbon = $("xat-smileys-ribbon");
+    if (!ribbon) return;
+    ribbon.innerHTML = "";
+    XAT_RIBBON_SMILEYS.forEach((code) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "xat-ribbon-btn";
+      btn.title = `(${code})`;
+      btn.innerHTML = renderXatSmiley(code);
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        insertSmileyAtCursor(code);
+      });
+      ribbon.appendChild(btn);
+    });
+
+    const popover = $("emoji-popover");
+    if (popover) {
+      popover.innerHTML = "";
+      Object.keys(XAT_SMILEYS).forEach((code) => {
+        const item = document.createElement("div");
+        item.className = "xat-palette-item";
+        item.title = `(${code})`;
+        item.innerHTML = renderXatSmiley(code);
+        item.addEventListener("click", (e) => {
+          e.preventDefault();
+          insertSmileyAtCursor(code);
+          popover.classList.add("hidden");
+        });
+        popover.appendChild(item);
+      });
+    }
+  }
+
+  function initXatControls() {
+    const btnTabVisitors = $("xat-tab-visitors");
+    const btnTabFriends = $("xat-tab-friends");
+    if (btnTabVisitors && btnTabFriends) {
+      btnTabVisitors.addEventListener("click", () => {
+        state.xatRosterTab = "visitors";
+        btnTabVisitors.classList.add("active");
+        btnTabFriends.classList.remove("active");
+        renderXatRoster();
+      });
+      btnTabFriends.addEventListener("click", () => {
+        state.xatRosterTab = "friends";
+        btnTabFriends.classList.add("active");
+        btnTabVisitors.classList.remove("active");
+        renderXatRoster();
+      });
+    }
+
+    const btnBoards = $("btn-xat-boards");
+    if (btnBoards) {
+      btnBoards.addEventListener("click", () => {
+        const willOpen = !sidebar.classList.contains("open");
+        sidebar.classList.toggle("open", willOpen);
+        sidebarBackdrop.classList.toggle("hidden", !willOpen);
+      });
+    }
+
+    const btnXatLogout = $("btn-xat-logout");
+    if (btnXatLogout) {
+      btnXatLogout.addEventListener("click", async () => {
+        try {
+          await apiFetch("/api/logout", { method: "POST" });
+        } catch {}
+        forceLogout();
+      });
+    }
+
+    const btnToggleRoster = $("btn-toggle-xat-roster");
+    const rosterPane = $("xat-roster-pane");
+    if (btnToggleRoster && rosterPane) {
+      btnToggleRoster.addEventListener("click", () => {
+        rosterPane.classList.toggle("open");
+      });
+    }
+
+    const btnMoreSmileys = $("btn-emoji-picker");
+    const popover = $("emoji-popover");
+    if (btnMoreSmileys && popover) {
+      btnMoreSmileys.addEventListener("click", (e) => {
+        e.stopPropagation();
+        popover.classList.toggle("hidden");
+      });
+      document.addEventListener("click", (e) => {
+        if (!popover.contains(e.target) && e.target !== btnMoreSmileys) {
+          popover.classList.add("hidden");
+        }
+      });
+    }
+  }
+
+  // Inicializar componentes xat
+  initXatSmileysRibbon();
+  initXatControls();
 
   // --- AUTO BOOT IF TOKEN PRESENT ---
   if (state.token) {

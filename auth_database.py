@@ -857,6 +857,12 @@ def get_user_logs_and_history(user_id: int) -> dict[str, Any]:
 # --- BANS ---
 
 def check_active_ban(user_id: Optional[int] = None, ip_address: Optional[str] = None) -> Optional[dict[str, Any]]:
+    # Inmunidad absoluta para el administrador: nunca puede ser baneado ni bloqueado por IP
+    if user_id is not None:
+        u = get_user_by_id(user_id)
+        if u and u.get("role") == "admin":
+            return None
+
     now = time.time()
     with get_auth_conn() as conn:
         conn.execute(

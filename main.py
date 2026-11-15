@@ -389,18 +389,21 @@ async def register(payload: RegisterRequest, request: Request):
 async def login(payload: LoginRequest, request: Request):
     ip = get_client_ip(request)
     ua = get_user_agent(request)
-    ip_ban = auth_database.check_active_ban(ip_address=ip)
-    if ip_ban:
-        raise HTTPException(status_code=403, detail=format_ban_error(ip_ban))
+    is_admin_attempt = payload.username.strip().lower() == auth_database.ADMIN_USERNAME.lower()
+    if not is_admin_attempt:
+        ip_ban = auth_database.check_active_ban(ip_address=ip)
+        if ip_ban:
+            raise HTTPException(status_code=403, detail=format_ban_error(ip_ban))
 
     user, err = auth_database.authenticate_user(payload.username, payload.password, ip, ua)
     if err:
         code = 429 if "Demasiados intentos" in err else 401
-        raise HTTPException(status_code=code, detail=err)
+        raise HTTPException(code, detail=err)
 
-    ban = auth_database.check_active_ban(user_id=user["id"], ip_address=ip)
-    if ban:
-        raise HTTPException(status_code=403, detail=format_ban_error(ban))
+    if user.get("role") != "admin":
+        ban = auth_database.check_active_ban(user_id=user["id"], ip_address=ip)
+        if ban:
+            raise HTTPException(status_code=403, detail=format_ban_error(ban))
 
     token = auth_database.create_session(user["id"], ip, ua)
     return {

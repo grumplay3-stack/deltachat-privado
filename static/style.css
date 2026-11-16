@@ -368,6 +368,10 @@ button {
   flex-shrink: 0;
 }
 
+.sidebar.collapsed {
+  display: none !important;
+}
+
 .sidebar-section {
   padding: 10px;
   border-bottom: 1px solid var(--border-color);
@@ -1376,130 +1380,314 @@ button {
   }
 }
 
+@media (max-width: 1120px) {
+  .xat-promo-card {
+    display: none;
+  }
+}
+
+@media (max-width: 850px) {
+  .xat-carousel-arrow {
+    display: none;
+  }
+  .xat-widget-container {
+    width: 100%;
+  }
+}
+}
+
 /* ==========================================================================
    ESTILOS XAT DARK (DARK THEME & CLASSIC XAT INTERFACE)
    ========================================================================== */
 
 :root {
-  --xat-bg-outer: #0d0f14;
-  --xat-bg-panel: #141720;
-  --xat-bg-feed: #0f1117;
-  --xat-bg-roster: #13161f;
-  --xat-bg-input: #0b0c10;
-  --xat-border: #232734;
-  --xat-border-glow: #384157;
-  --xat-text-main: #e2e8f0;
-  --xat-text-muted: #7e8b9b;
-  --xat-blue-accent: #3182ce;
-  --xat-blue-glow: #63b3ed;
+  --xat-navy-header: #051026;
+  --xat-navy-border: #102347;
+  --xat-bg-outer: #070b14;
+  --xat-bg-panel: #111624;
+  --xat-bg-feed: #0e121c;
+  --xat-bg-roster: #121724;
+  --xat-bg-input: #090c12;
+  --xat-border: #1d273c;
+  --xat-border-glow: #2d3d5e;
+  --xat-text-main: #f0f4f8;
+  --xat-text-muted: #8292a6;
+  --xat-blue-accent: #0d6efd;
+  --xat-blue-glow: #388bfd;
   --xat-gold: #f6ad55;
-  --xat-green: #48bb78;
-  --xat-red: #f56565;
+  --xat-green: #2ecc71;
+  --xat-red: #e74c3c;
 }
 
-/* Modificaciones al contenedor principal */
+/* --- BARRA SUPERIOR ESTILO XAT REAL (NAVBAR) --- */
+.top-nav.xat-top-navbar {
+  height: 46px;
+  background: linear-gradient(180deg, #07152b 0%, #030a16 100%);
+  border-bottom: 1px solid var(--xat-navy-border);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+}
+
+.xat-logo-brand {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.xat-planet-icon {
+  font-size: 22px;
+  filter: drop-shadow(0 0 6px #388bfd);
+}
+
+.xat-brand-text {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.xat-header-links {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 20px;
+}
+
+.xat-nav-btn {
+  background: transparent;
+  border: none;
+  color: #c9d6e8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.12s ease;
+}
+
+.xat-nav-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.xat-sound-chip {
+  background: #111a2e;
+  border: 1px solid #233559;
+  color: #c0d1ed;
+}
+
+.xat-sound-chip:hover {
+  background: #192745;
+  border-color: #388bfd;
+}
+
+.xat-user-chip {
+  background: #0f1c33;
+  border: 1px solid #283e6b;
+  color: #58a6ff;
+  font-weight: 700;
+}
+
+.xat-btn-register {
+  background: linear-gradient(180deg, #0d6efd 0%, #0052cc 100%);
+  color: #ffffff;
+  border: 1px solid #388bfd;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 4px 12px;
+}
+
+.xat-btn-register:hover {
+  background: linear-gradient(180deg, #1a75ff 0%, #005ce6 100%);
+}
+
+.xat-meta-icons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 6px;
+  font-size: 15px;
+  cursor: default;
+  opacity: 0.75;
+}
+
+/* --- SIDEBAR HEADER BAR --- */
+.sidebar-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: #111624;
+}
+
+/* --- CONTENEDOR PRINCIPAL Y ESCENARIO XAT --- */
 .xat-chat-main {
   background-color: var(--xat-bg-outer);
-  padding: 8px 10px 10px 10px;
-  gap: 8px;
-}
-
-.board-banner.xat-banner {
-  background: linear-gradient(180deg, #181c26 0%, #12151e 100%);
-  border: 1px solid var(--xat-border);
-  border-radius: 4px;
-  padding: 8px 14px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-}
-
-/* Layout partido estilo xat: mensajes a la izquierda + lista a la derecha */
-.xat-layout-wrap {
-  flex: 1;
+  padding: 14px 10px;
   display: flex;
-  min-height: 0;
-  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+}
+
+.xat-stage-center {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 1140px;
+  margin: 0 auto;
+}
+
+/* Flechas circulares de carrusel estilo xat */
+.xat-carousel-arrow {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0d6efd 0%, #004ecc 100%);
+  color: #ffffff;
+  border: 1px solid #388bfd;
+  font-size: 26px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-top: 220px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(13, 110, 253, 0.45);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  user-select: none;
+}
+
+.xat-carousel-arrow:hover {
+  transform: scale(1.12);
+  box-shadow: 0 6px 18px rgba(13, 110, 253, 0.65);
+}
+
+.xat-carousel-arrow:active {
+  transform: scale(0.96);
+}
+
+/* WIDGET DEL CHAT PRINCIPAL */
+.xat-widget-container {
+  width: 680px;
+  max-width: 100%;
+  background-color: var(--xat-bg-panel);
+  border: 1px solid var(--xat-border);
+  border-radius: 6px;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Barra de radio estilo xat ConectFm */
+.xat-radio-bar {
+  background: linear-gradient(180deg, #171d2b 0%, #111520 100%);
+  border-bottom: 1px solid var(--xat-border);
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Layout dividido: mensajes a la izquierda + roster a la derecha */
+.xat-layout-wrap {
+  display: flex;
+  height: 430px;
+  min-height: 380px;
   position: relative;
   background-color: var(--xat-bg-feed);
-  border: 1px solid var(--xat-border);
-  border-radius: 5px;
-  overflow: hidden;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 16px rgba(0, 0, 0, 0.45);
 }
 
 .xat-chat-pane {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   min-width: 0;
+  min-height: 0;
+  background-color: var(--xat-bg-feed);
 }
 
-/* Feed de mensajes con estilo xat */
+/* Feed de mensajes fluido estilo xat */
 .messages-feed.xat-messages-feed {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 14px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
   background-color: var(--xat-bg-feed);
   scrollbar-width: thin;
-  scrollbar-color: #2b3142 transparent;
+  scrollbar-color: #242c3d transparent;
 }
 
 .messages-feed.xat-messages-feed::-webkit-scrollbar {
-  width: 7px;
+  width: 6px;
 }
 .messages-feed.xat-messages-feed::-webkit-scrollbar-thumb {
-  background: #2b3142;
-  border-radius: 4px;
+  background: #242c3d;
+  border-radius: 3px;
 }
 .messages-feed.xat-messages-feed::-webkit-scrollbar-thumb:hover {
-  background: #3e465e;
+  background: #38455e;
 }
 
-/* Tarjeta individual de mensaje xat */
+/* FILA INDIVIDUAL DE MENSAJE ESTILO XAT AUTÉNTICO */
 .post.xat-post {
-  background-color: #141720;
-  border: 1px solid #1e2330;
-  border-radius: 4px;
-  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 3px;
+  padding: 3px 6px;
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  transition: background-color 0.12s ease, border-color 0.12s ease;
+  transition: background-color 0.1s ease;
 }
 
 .post.xat-post:hover {
-  background-color: #181d28;
-  border-color: #2b3345;
+  background-color: rgba(255, 255, 255, 0.035);
 }
 
 .post.xat-post.highlighted {
-  background-color: #23221b;
-  border-color: var(--warn-amber);
+  background-color: rgba(246, 173, 85, 0.12);
 }
 
 .xat-post-avatar-col {
   flex-shrink: 0;
-  width: 32px;
+  width: 28px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 2px;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 1px;
 }
 
 .xat-post-avatar-img {
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  border: 1px solid #2d3445;
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+  border: 1px solid #232c3e;
   object-fit: cover;
-  background: #0b0d12;
+  background: #080b12;
 }
 
 .xat-post-content-col {
@@ -1507,55 +1695,51 @@ button {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .xat-post-header {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
-  font-size: 12px;
   line-height: 1.2;
-  margin-bottom: 2px;
 }
 
 .xat-post-author {
   font-weight: 700;
-  font-size: 13.5px;
+  font-size: 13px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  padding: 0;
 }
 
 .xat-post-author:hover {
   text-decoration: underline;
 }
 
-.xat-post-time {
-  font-size: 11px;
-  color: var(--xat-text-muted);
-  font-family: var(--font-mono);
-}
-
+.xat-post-time,
 .xat-post-no {
-  font-size: 11px;
-  color: #4a5568;
+  font-size: 10.5px;
+  color: #4b586e;
   font-family: var(--font-mono);
-  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
 
-.xat-post-no:hover {
-  color: var(--xat-blue-glow);
-  text-decoration: underline;
+.post.xat-post:hover .xat-post-time,
+.post.xat-post:hover .xat-post-no {
+  opacity: 0.85;
 }
 
 .xat-post-actions {
   margin-left: auto;
   display: flex;
   gap: 3px;
-  opacity: 0.65;
+  opacity: 0;
   transition: opacity 0.12s ease;
 }
 
@@ -1564,17 +1748,27 @@ button {
 }
 
 .xat-post-body {
-  font-size: 13.5px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.38;
   color: var(--xat-text-main);
   word-break: break-word;
+}
+
+/* Reacciones discretas: se ocultan si están vacías */
+.post-reactions.reactions-empty {
+  display: none;
+}
+
+.post.xat-post:hover .post-reactions.reactions-empty {
+  display: flex;
+  opacity: 0.6;
 }
 
 /* ==========================================================================
    PANEL DERECHO: ROSTER DE USUARIOS XAT (VISITORS / FRIENDS)
    ========================================================================== */
 .xat-roster-pane {
-  width: 210px;
+  width: 185px;
   background-color: var(--xat-bg-roster);
   border-left: 1px solid var(--xat-border);
   display: flex;
@@ -1584,39 +1778,39 @@ button {
 }
 
 .xat-roster-header {
-  padding: 7px 10px;
-  background: linear-gradient(180deg, #1b202c 0%, #151923 100%);
+  padding: 6px 10px;
+  background: linear-gradient(180deg, #181d2a 0%, #121620 100%);
   border-bottom: 1px solid var(--xat-border);
   font-weight: 700;
-  font-size: 12px;
-  color: #a0aec0;
+  font-size: 11.5px;
+  color: #94a3b8;
   letter-spacing: 0.3px;
 }
 
 .xat-roster-list {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: 3px 0;
   scrollbar-width: thin;
-  scrollbar-color: #2b3142 transparent;
+  scrollbar-color: #242c3d transparent;
 }
 
 .xat-roster-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
+  gap: 6px;
+  padding: 4px 8px;
   cursor: pointer;
   transition: background-color 0.1s ease;
   user-select: none;
 }
 
 .xat-roster-item:hover {
-  background-color: #1c212e;
+  background-color: #19202e;
 }
 
 .xat-roster-item.active {
-  background-color: #242c3d;
+  background-color: #222b3d;
 }
 
 .xat-roster-item-info {
@@ -1628,14 +1822,17 @@ button {
 
 .xat-roster-item-name {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .xat-roster-item-sub {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--xat-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -1645,17 +1842,17 @@ button {
 .xat-roster-tabs {
   display: flex;
   border-top: 1px solid var(--xat-border);
-  background: #11141c;
+  background: #0f131d;
 }
 
 .xat-tab-btn {
   flex: 1;
-  padding: 7px 6px;
-  font-size: 11.5px;
+  padding: 6px 4px;
+  font-size: 11px;
   font-weight: 700;
   background: transparent;
   border: none;
-  color: #718096;
+  color: #64748b;
   cursor: pointer;
   transition: all 0.12s ease;
   border-bottom: 2px solid transparent;
@@ -1667,27 +1864,60 @@ button {
 }
 
 .xat-tab-btn.active {
-  color: #63b3ed;
-  background: #171c26;
-  border-bottom-color: #3182ce;
+  color: #388bfd;
+  background: #151b27;
+  border-bottom-color: #0d6efd;
+}
+
+/* 4 Mini iconos de xat */
+.xat-roster-mini-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 5px 6px;
+  background: #0d1017;
+  border-top: 1px solid #19202e;
+}
+
+.xat-mini-icon {
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.xat-mini-icon:hover {
+  opacity: 1;
+  transform: scale(1.18);
+}
+
+.xat-mini-icon.xat-text-badge {
+  font-size: 11px;
+  font-weight: 800;
+  background: #0d6efd;
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: -0.4px;
 }
 
 .xat-roster-actions {
   display: flex;
-  gap: 6px;
-  padding: 8px 8px;
+  gap: 5px;
+  padding: 6px;
   border-top: 1px solid var(--xat-border);
-  background: #0f1218;
+  background: #0d1018;
 }
 
 .xat-action-btn {
   flex: 1;
-  padding: 6px 4px;
-  font-size: 11px;
+  padding: 5px 3px;
+  font-size: 10.5px;
   font-weight: 700;
-  background: linear-gradient(180deg, #2b3242 0%, #191d26 100%);
+  background: linear-gradient(180deg, #2a3346 0%, #191f2c 100%);
   color: #e2e8f0;
-  border: 1px solid #3d465c;
+  border: 1px solid #3d4a63;
   border-radius: 3px;
   cursor: pointer;
   text-align: center;
@@ -1696,37 +1926,51 @@ button {
 }
 
 .xat-action-btn:hover {
-  background: linear-gradient(180deg, #374258 0%, #202735 100%);
-  border-color: #63b3ed;
+  background: linear-gradient(180deg, #37445c 0%, #202838 100%);
+  border-color: #388bfd;
   color: #ffffff;
 }
 
 /* ==========================================================================
-   COMPOSITOR & SMILEY RIBBON BAR ESTILO XAT
+   COMPOSITOR & EMOJI RIBBON BAR ESTILO XAT
    ========================================================================== */
 .composer.xat-composer {
-  background: linear-gradient(180deg, #151822 0%, #10121a 100%);
+  background: linear-gradient(180deg, #131722 0%, #0e1119 100%);
   border-top: 1px solid var(--xat-border);
-  padding: 7px 10px 9px 10px;
+  padding: 6px 10px 8px 10px;
+}
+
+.xat-composer-room-tag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8292a6;
+  margin-bottom: 4px;
+}
+
+.xat-composer-room-tag .room-bubble-icon {
+  font-size: 12px;
 }
 
 .xat-smiley-bar-wrap {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin-bottom: 6px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .xat-smileys-ribbon {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   overflow-x: auto;
   scrollbar-width: none;
-  padding: 2px 2px;
+  padding: 1px 2px;
 }
 
 .xat-smileys-ribbon::-webkit-scrollbar {
@@ -1736,7 +1980,7 @@ button {
 .xat-ribbon-btn {
   background: transparent;
   border: none;
-  padding: 2px;
+  padding: 1px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1746,15 +1990,15 @@ button {
 }
 
 .xat-ribbon-btn:hover {
-  transform: scale(1.22);
+  transform: scale(1.24);
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.6));
 }
 
 .xat-more-emojis-btn {
-  background: #1f2430;
-  border: 1px solid #374053;
-  color: #a0aec0;
-  padding: 3px 8px;
+  background: #1b212f;
+  border: 1px solid #313c52;
+  color: #94a3b8;
+  padding: 2px 7px;
   border-radius: 3px;
   font-size: 11px;
   cursor: pointer;
@@ -1763,69 +2007,180 @@ button {
 }
 
 .xat-more-emojis-btn:hover {
-  background: #2a3142;
+  background: #252d40;
   color: #fff;
 }
 
 .composer-controls.xat-composer-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .xat-ctrl-btn {
-  background: #1e222e;
-  border: 1px solid #32394a;
+  background: #191f2c;
+  border: 1px solid #2b354a;
   color: #cbd5e0;
   border-radius: 3px;
-  padding: 8px 12px;
+  padding: 6px 9px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.12s ease;
 }
 
 .xat-ctrl-btn:hover {
-  background: #2b3244;
-  border-color: #4a5568;
+  background: #242c3e;
+  border-color: #388bfd;
 }
 
 .xat-composer-controls textarea {
   flex: 1;
-  min-height: 38px;
-  max-height: 90px;
+  min-height: 34px;
+  max-height: 80px;
   resize: none;
-  background: #090a0d;
-  border: 1px solid #282f3f;
+  background: #080a0f;
+  border: 1px solid #252f44;
   border-radius: 3px;
-  color: #f7fafc;
-  padding: 8px 10px;
-  font-size: 13.5px;
+  color: #f8fafc;
+  padding: 7px 9px;
+  font-size: 13px;
   font-family: inherit;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .xat-composer-controls textarea:focus {
   outline: none;
-  border-color: #3182ce;
-  box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.3);
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
 }
 
 .xat-send-btn {
-  background: linear-gradient(180deg, #3182ce 0%, #1e4e79 100%);
-  color: #ffffff;
-  font-size: 17px;
+  background: linear-gradient(180deg, #37455e 0%, #1e2636 100%);
+  color: #e2e8f0;
+  font-size: 16px;
   font-weight: 700;
-  border: 1px solid #4299e1;
+  border: 1px solid #4a5b7d;
   border-radius: 3px;
-  padding: 7px 18px;
+  padding: 6px 14px;
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   transition: all 0.12s ease;
 }
 
 .xat-send-btn:hover {
-  background: linear-gradient(180deg, #4299e1 0%, #2b6cb0 100%);
-  border-color: #63b3ed;
+  background: linear-gradient(180deg, #445675 0%, #252f42 100%);
+  border-color: #388bfd;
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   TARJETA LATERAL DERECHA "¿NUEVO EN XAT?"
+   ========================================================================== */
+.xat-promo-card {
+  width: 280px;
+  background-color: var(--xat-bg-panel);
+  border: 1px solid var(--xat-border);
+  border-radius: 6px;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6);
+  flex-shrink: 0;
+}
+
+.xat-promo-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.xat-promo-desc {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.btn-xat-learn-more {
+  background: linear-gradient(180deg, #0d6efd 0%, #0052cc 100%);
+  color: #ffffff;
+  border: 1px solid #388bfd;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  align-self: flex-start;
+  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.4);
+  transition: transform 0.12s ease;
+}
+
+.btn-xat-learn-more:hover {
+  transform: translateY(-1px);
+}
+
+.xat-promo-social {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+.xat-promo-social .social-link {
+  color: #cbd5e0;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 13px;
+  transition: color 0.12s ease;
+}
+
+.xat-promo-social .social-link:hover {
+  color: #388bfd;
+}
+
+/* ==========================================================================
+   PIE DE PÁGINA XAT CLÁSICO (FOOTER)
+   ========================================================================== */
+.xat-bottom-footer {
+  padding: 10px 14px;
+  background: #090c13;
+  border-top: 1px solid #161c28;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.xat-footer-tagline {
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.xat-footer-tagline strong {
+  color: #388bfd;
+}
+
+.xat-footer-promoted {
+  color: #4b586e;
+}
+
+.xat-footer-promoted span,
+.xat-footer-promoted a {
+  color: #3182ce;
+  text-decoration: none;
+}
+
+.xat-footer-promoted a:hover {
+  text-decoration: underline;
 }
 
 /* ==========================================================================
@@ -1833,19 +2188,19 @@ button {
    ========================================================================== */
 .xat-smiley {
   display: inline-block;
-  vertical-align: -5px;
-  width: 22px;
-  height: 22px;
+  vertical-align: -4px;
+  width: 20px;
+  height: 20px;
   margin: 0 1.5px;
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.4));
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.45));
   pointer-events: none;
 }
 
 .xat-pawn {
   display: inline-block;
   vertical-align: -3px;
-  width: 16px;
-  height: 19px;
+  width: 15px;
+  height: 18px;
   margin-right: 2px;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
   flex-shrink: 0;
@@ -1857,7 +2212,7 @@ button {
   grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   padding: 10px;
-  background: #161a24;
+  background: #141926;
   border: 1px solid var(--xat-border-glow);
   border-radius: 5px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
@@ -1898,4 +2253,696 @@ button {
   .xat-roster-pane.open {
     display: flex;
   }
+}
+
+/* ==========================================================================
+   RADIO STREAM BAR & SINTONIZADOR ADMIN
+   ========================================================================== */
+.xat-radio-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(90deg, #131722 0%, #1a202c 100%);
+  border: 1px solid #2d3748;
+  border-radius: 4px;
+  padding: 4px 10px;
+  margin: 0 12px;
+  gap: 10px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.xat-radio-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.xat-radio-icon {
+  font-size: 15px;
+}
+
+.xat-radio-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.xat-radio-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #4a5568;
+  color: #a0aec0;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+}
+
+.xat-radio-badge.live {
+  background: #e53e3e;
+  color: #ffffff;
+  animation: pulse-live 1.8s infinite;
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.xat-radio-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-radio-ctrl {
+  background: #242b3d;
+  border: 1px solid #3e4a63;
+  color: #edf2f7;
+  border-radius: 3px;
+  padding: 3px 7px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.btn-radio-ctrl:hover {
+  background: #3182ce;
+  border-color: #63b3ed;
+  color: #fff;
+}
+
+.xat-vol-slider {
+  width: 60px;
+  height: 5px;
+  accent-color: #3182ce;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   GRABADOR DE VOZ (OPUS / WEBM)
+   ========================================================================== */
+.voice-record-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #271418;
+  border: 1px solid #e53e3e;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.voice-pulse-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #fed7d7;
+}
+
+.voice-pulse-indicator .rec-dot {
+  color: #e53e3e;
+  font-size: 16px;
+  animation: pulse-dot 1s infinite alternate;
+}
+
+@keyframes pulse-dot {
+  from { opacity: 0.3; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1.15); }
+}
+
+.voice-wave-anim {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+}
+
+.voice-wave-anim span {
+  display: inline-block;
+  width: 3px;
+  height: 100%;
+  background: #e53e3e;
+  border-radius: 2px;
+  animation: voice-bars 0.8s infinite ease-in-out alternate;
+}
+
+.voice-wave-anim span:nth-child(2) { animation-delay: 0.15s; }
+.voice-wave-anim span:nth-child(3) { animation-delay: 0.3s; }
+.voice-wave-anim span:nth-child(4) { animation-delay: 0.45s; }
+.voice-wave-anim span:nth-child(5) { animation-delay: 0.6s; }
+
+@keyframes voice-bars {
+  0% { transform: scaleY(0.2); }
+  100% { transform: scaleY(1); }
+}
+
+.voice-record-btns {
+  display: flex;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   REPRODUCTOR DE AUDIO (MINI PLAYER CON WAVEFORM)
+   ========================================================================== */
+.xat-audio-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #141720;
+  border: 1px solid #283144;
+  border-radius: 6px;
+  padding: 8px 12px;
+  max-width: 340px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  margin-top: 6px;
+}
+
+.audio-play-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #3182ce;
+  border: none;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+
+.audio-play-btn:hover {
+  transform: scale(1.08);
+  background: #4299e1;
+}
+
+.audio-wave-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.audio-waveform-bars {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.audio-bar-stick {
+  flex: 1;
+  min-width: 2px;
+  max-width: 4px;
+  background: #4a5568;
+  border-radius: 2px;
+  transition: background 0.1s ease;
+}
+
+.audio-bar-stick.played {
+  background: #63b3ed;
+}
+
+.audio-bar-stick.active-play {
+  background: #90cdf4;
+}
+
+.audio-time-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #a0aec0;
+  font-family: var(--font-mono);
+}
+
+.audio-download-btn {
+  background: none;
+  border: none;
+  color: #718096;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.15s ease;
+}
+
+.audio-download-btn:hover {
+  color: #e2e8f0;
+}
+
+/* ==========================================================================
+   REPRODUCTOR DE VIDEO (25MB, MINIATURA CLICK-TO-PLAY, PIP & MODO GIF)
+   ========================================================================== */
+.xat-video-wrap {
+  position: relative;
+  max-width: 440px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #283144;
+  background: #0d1117;
+  margin-top: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.xat-video-thumb-container {
+  position: relative;
+  width: 100%;
+  max-height: 280px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000000;
+}
+
+.xat-video-thumb-img {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  display: block;
+}
+
+.xat-video-play-gloss {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(49, 130, 206, 0.85);
+  box-shadow: 0 0 16px rgba(49, 130, 206, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.xat-video-thumb-container:hover .xat-video-play-gloss {
+  transform: scale(1.15);
+  background: rgba(66, 153, 225, 0.95);
+}
+
+.xat-video-player {
+  width: 100%;
+  max-height: 360px;
+  display: block;
+  background: #000;
+}
+
+.xat-video-player.gif-mode {
+  pointer-events: none;
+}
+
+.xat-video-top-bar {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 5px;
+  z-index: 10;
+}
+
+.btn-video-top {
+  background: rgba(15, 20, 30, 0.75);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.btn-video-top:hover {
+  background: rgba(49, 130, 206, 0.9);
+  border-color: #63b3ed;
+}
+
+.video-gif-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #63b3ed;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  border: 1px solid #3182ce;
+  font-family: var(--font-mono);
+}
+
+/* ==========================================================================
+   VISTA PREVIA COMPOSITOR MEDIA (FOTOS / VIDEOS / AUDIOS)
+   ========================================================================== */
+.media-prep-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+#media-prep-preview {
+  width: 50px;
+  height: 50px;
+  border-radius: 4px;
+  background: #11151f;
+  border: 1px solid #2d3748;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+#media-prep-preview img,
+#media-prep-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.aud-prep-icon {
+  font-size: 22px;
+}
+
+.media-prep-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.media-prep-options {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   TARJETAS DE ENCUESTAS (POLLS)
+   ========================================================================== */
+.xat-poll-card {
+  background: #151924;
+  border: 1px solid #2b354a;
+  border-left: 4px solid #3182ce;
+  border-radius: 6px;
+  padding: 10px 14px;
+  max-width: 420px;
+  margin-top: 6px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.xat-poll-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.xat-poll-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f7fafc;
+}
+
+.xat-poll-badge {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.xat-poll-badge.open {
+  background: #276749;
+  color: #9ae6b4;
+}
+
+.xat-poll-badge.closed {
+  background: #742a2a;
+  color: #feb2b2;
+}
+
+.xat-poll-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.xat-poll-opt-btn {
+  position: relative;
+  background: #1c2230;
+  border: 1px solid #2f3a52;
+  border-radius: 4px;
+  padding: 6px 10px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.12s ease;
+}
+
+.xat-poll-opt-btn:hover:not(:disabled) {
+  border-color: #4299e1;
+}
+
+.xat-poll-opt-btn.my-vote {
+  border-color: #3182ce;
+  background: #1b263b;
+}
+
+.xat-poll-opt-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: rgba(49, 130, 206, 0.28);
+  border-radius: 3px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.xat-poll-opt-btn.my-vote .xat-poll-opt-bar {
+  background: rgba(66, 153, 225, 0.42);
+}
+
+.xat-poll-opt-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #e2e8f0;
+  z-index: 2;
+}
+
+.xat-poll-opt-pct {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #63b3ed;
+  font-size: 11px;
+}
+
+.xat-poll-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #232a3b;
+  font-size: 11px;
+  color: #a0aec0;
+}
+
+.btn-close-poll {
+  background: none;
+  border: 1px solid #4a5568;
+  color: #cbd5e0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.btn-close-poll:hover {
+  background: #742a2a;
+  border-color: #e53e3e;
+  color: #fff;
+}
+
+/* ==========================================================================
+   CENSURA +18 (BLUR & SPOILER OVERLAY)
+   ========================================================================== */
+.media-nsfw-wrap {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.media-nsfw-wrap.blurred > :not(.media-nsfw-overlay) {
+  filter: blur(22px) brightness(0.65);
+  pointer-events: none;
+  user-select: none;
+}
+
+.media-nsfw-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 10, 15, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  cursor: pointer;
+  z-index: 8;
+  text-align: center;
+  transition: background 0.15s ease;
+}
+
+.media-nsfw-overlay:hover {
+  background: rgba(10, 10, 15, 0.72);
+}
+
+.nsfw-icon {
+  font-size: 24px;
+}
+
+.nsfw-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f6ad55;
+}
+
+.nsfw-subtext {
+  font-size: 10.5px;
+  color: #cbd5e0;
+}
+
+/* ==========================================================================
+   SMART EMBEDS (YOUTUBE, SPOTIFY, ETC.)
+   ========================================================================== */
+.xat-embed-card {
+  max-width: 440px;
+  background: #121622;
+  border: 1px solid #2a3449;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 6px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.xat-embed-thumb-wrap {
+  position: relative;
+  width: 100%;
+  height: 190px;
+  background: #000;
+  cursor: pointer;
+}
+
+.xat-embed-thumb-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.xat-embed-play-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 50px;
+  height: 36px;
+  background: rgba(229, 62, 62, 0.9);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 16px;
+  transition: transform 0.1s ease, background 0.1s ease;
+}
+
+.xat-embed-thumb-wrap:hover .xat-embed-play-btn {
+  transform: translate(-50%, -50%) scale(1.12);
+  background: #e53e3e;
+}
+
+.xat-embed-iframe {
+  width: 100%;
+  height: 240px;
+  border: none;
+  display: block;
+}
+
+.xat-embed-meta {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #181d2a;
+  border-top: 1px solid #263045;
+}
+
+.xat-embed-service {
+  font-weight: 700;
+  color: #e53e3e;
+}
+
+.xat-embed-service.spotify {
+  color: #48bb78;
+}
+
+/* ==========================================================================
+   PIE DE PÁGINA XAT CLÁSICO (PROMOCIÓN / CONECTFM)
+   ========================================================================== */
+.xat-bottom-footer {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #0c0f17;
+  border: 1px solid #1f2738;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 11px;
+  color: #718096;
+}
+
+.xat-footer-tagline strong {
+  color: #63b3ed;
+}
+
+.xat-footer-tagline .footer-note {
+  color: #a0aec0;
+}
+
+.xat-footer-promoted {
+  margin-top: 4px;
+  color: #4a5568;
+}
+
+.xat-footer-promoted span {
+  color: #4299e1;
+  cursor: pointer;
+  margin: 0 2px;
+}
+
+.xat-footer-promoted span:hover {
+  text-decoration: underline;
 }

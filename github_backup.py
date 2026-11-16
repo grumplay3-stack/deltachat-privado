@@ -42,26 +42,49 @@ def format_backup_text(date_str: str) -> str:
             if m["is_system"]:
                 continue
             dt = datetime.fromtimestamp(m["created_at"]).strftime("%m-%d-%Y %H:%M:%S")
-            text = (m["content"] or "").strip()
-            if not text:
-                continue
             user_label = m["username"]
             if m["alias"] and m["alias"] != m["username"]:
                 user_label = f"{m['username']} (alias: {m['alias']})"
-            lines.append(f"[{dt}] {user_label}: {text}")
+
+            poll = m.get("poll")
+            if poll:
+                lines.append(f"[{dt}] {user_label}: [ENCUESTA] {poll['question']}")
+                for opt in poll.get("options", []):
+                    marker = "[=]" if opt.get("votes", 0) > 0 else "[-]"
+                    lines.append(
+                        f"    {marker} Opción: {opt.get('text', '')} ({opt.get('votes', 0)} votos - {opt.get('percentage', 0.0)}%)"
+                    )
+                status_str = "Cerrada" if poll.get("is_closed") else "Abierta"
+                lines.append(f"    Total votos: {poll.get('total_votes', 0)} | Estado: {status_str}")
+            else:
+                text = (m["content"] or "").strip()
+                if not text:
+                    continue
+                lines.append(f"[{dt}] {user_label}: {text}")
         lines.append("")
 
     dms = data["dms"]
     if dms:
         lines.append("--- MENSAJES DIRECTOS PRIVADOS (DMs) ---")
         for d in dms:
-            text = (d["content"] or "").strip()
-            if not text:
-                continue
             dt = datetime.fromtimestamp(d["created_at"]).strftime("%m-%d-%Y %H:%M:%S")
-            lines.append(
-                f"[{dt}] {d['sender_username']} -> {d['receiver_username']}: {text}"
-            )
+            poll = d.get("poll")
+            if poll:
+                lines.append(f"[{dt}] {d['sender_username']} -> {d['receiver_username']}: [ENCUESTA] {poll['question']}")
+                for opt in poll.get("options", []):
+                    marker = "[=]" if opt.get("votes", 0) > 0 else "[-]"
+                    lines.append(
+                        f"    {marker} Opción: {opt.get('text', '')} ({opt.get('votes', 0)} votos - {opt.get('percentage', 0.0)}%)"
+                    )
+                status_str = "Cerrada" if poll.get("is_closed") else "Abierta"
+                lines.append(f"    Total votos: {poll.get('total_votes', 0)} | Estado: {status_str}")
+            else:
+                text = (d["content"] or "").strip()
+                if not text:
+                    continue
+                lines.append(
+                    f"[{dt}] {d['sender_username']} -> {d['receiver_username']}: {text}"
+                )
         lines.append("")
 
     return "\n".join(lines)

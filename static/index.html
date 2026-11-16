@@ -198,30 +198,53 @@
   <!-- PANTALLA PRINCIPAL DE CHAT -->
   <div id="chat-screen" class="app-shell hidden">
 
-    <!-- BARRA SUPERIOR ESTILO 4CHAN -->
-    <header class="top-nav">
+    <!-- BARRA SUPERIOR ESTILO XAT OSCURO -->
+    <header class="top-nav xat-top-navbar">
       <div class="nav-left">
-        <button type="button" id="btn-menu-toggle" class="mobile-only btn-icon" aria-label="Menú">☰</button>
-        <img src="/static/assets/logo.jpg" alt="DeltaChat" class="nav-logo" />
-        <span class="brand-title">DeltaChat</span>
-        <nav id="top-board-links" class="board-links desktop-only"></nav>
+        <button type="button" id="btn-menu-toggle" class="btn-icon" aria-label="Menú Tablones" title="Abrir Tablones">☰</button>
+        <div class="xat-logo-brand" id="brand-home-link" title="xat / DeltaChat">
+          <span class="xat-planet-icon">🪐</span>
+          <span class="xat-brand-text">xat</span>
+        </div>
+        <nav class="xat-header-links desktop-only">
+          <button type="button" id="btn-nav-grupos" class="xat-nav-btn" title="Explorar Grupos y Tablones">
+            <span class="xat-nav-icon">🪐</span> grupos
+          </button>
+          <button type="button" id="btn-nav-tienda" class="xat-nav-btn" title="Powers y Funciones">
+            <span class="xat-nav-icon">🛍️</span> tienda
+          </button>
+          <button type="button" id="btn-nav-radio" class="xat-nav-btn" title="Radio en vivo">
+            <span class="xat-nav-icon">📻</span> radio
+          </button>
+        </nav>
+        <nav id="top-board-links" class="board-links hidden"></nav>
       </div>
       <div class="nav-right">
         <span class="conn-dot" id="ws-status" title="Estado de conexión">●</span>
-        <button type="button" id="btn-open-alias" class="btn-chip" title="Cambiar tu Alias">
-          Alias: <strong id="my-alias-label">...</strong>
+        <button type="button" id="btn-toggle-sound" class="btn-chip xat-sound-chip" title="Sonido de notificaciones estilo xat/MSN">🔔 Sonido: ON</button>
+        <button type="button" id="btn-open-alias" class="btn-chip xat-user-chip" title="Cambiar tu Alias y Perfil">
+          <span class="xat-pawn-sm">👤</span> <strong id="my-alias-label">...</strong>
         </button>
         <button type="button" id="btn-open-admin" class="btn-chip btn-admin hidden">[ Panel Admin ]</button>
-        <button type="button" id="btn-logout" class="btn-chip">[ Salir ]</button>
+        <button type="button" id="btn-logout" class="btn-chip xat-btn-register" title="Cerrar sesión">[ Salir ]</button>
+        <span class="xat-meta-icons desktop-only">
+          <span class="xat-meta-icon" title="Versión Móvil">📱</span>
+          <span class="xat-meta-icon" title="Global">🌐</span>
+        </span>
       </div>
     </header>
 
     <div class="workspace-grid">
-      <!-- BACKDROP MÓVIL -->
+      <!-- BACKDROP MÓVIL / DRAWER -->
       <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
 
-      <!-- BARRA LATERAL: TABLONES, SOLICITUDES Y DMs -->
+      <!-- BARRA LATERAL: TABLONES, SOLICITUDES Y DMs (DRAWER DESPLEGABLE) -->
       <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header-bar">
+          <span class="section-title">Tablones &amp; DMs</span>
+          <button type="button" id="btn-close-sidebar" class="btn-mini" title="Ocultar barra">[x]</button>
+        </div>
+
         <div class="sidebar-section">
           <div class="section-title">Tablones</div>
           <ul id="channels-list" class="nav-list"></ul>
@@ -251,111 +274,213 @@
 
       <!-- ÁREA CENTRAL DE POSTS ESTILO XAT OSCURO -->
       <main class="chat-main xat-chat-main">
-        <div class="board-banner xat-banner">
-          <div class="banner-info">
-            <h2 id="active-room-title">/gen/ - General</h2>
-            <p id="active-room-desc">Charla libre del grupo</p>
-          </div>
-          <div class="search-wrap">
-            <input type="search" id="search-input" placeholder="Buscar texto o usa: #fotos..." />
-            <button type="button" id="btn-filter-media" class="btn-chip" title="Ver solo fotos">📷 Fotos</button>
-            <button type="button" id="btn-toggle-xat-roster" class="btn-chip mobile-only" title="Ver lista de usuarios">👥 <span id="mobile-online-count">0</span></button>
-          </div>
-        </div>
 
-        <div id="channel-pinned-bar" class="pinned-bar hidden">
-          <div class="pinned-tag">📌 FIJADO:</div>
-          <div id="channel-pinned-text" class="pinned-content"></div>
-          <button type="button" id="btn-unpin-msg" class="btn-mini hidden" title="Desfijar">[x]</button>
-        </div>
+        <!-- ESCENARIO CENTRAL ESTILO XAT CON CARRUSEL Y TARJETA LATERAL -->
+        <div class="xat-stage-center">
 
-        <div id="dm-request-banner" class="dm-status-banner hidden">
-          <div>
-            <strong>Solicitud de mensaje privado</strong> — Este usuario te envió un DM antes de ser amigos.
-          </div>
-          <div class="dm-banner-actions">
-            <button type="button" id="btn-dm-accept" class="btn-primary btn-sm">[Aceptar]</button>
-            <button type="button" id="btn-dm-reject" class="btn-secondary btn-sm">[Rechazar]</button>
-            <button type="button" id="btn-dm-block" class="btn-danger btn-sm">[Bloquear]</button>
-          </div>
-        </div>
+          <!-- FLECHA CARRUSEL IZQUIERDA -->
+          <button type="button" class="xat-carousel-arrow arrow-left" id="btn-carousel-prev" title="Anterior">‹</button>
 
-        <div id="dm-blocked-banner" class="dm-status-banner blocked hidden">
-          <span id="dm-blocked-text">No puedes enviar mensajes en esta conversación.</span>
-          <button type="button" id="btn-dm-readd" class="btn-secondary btn-sm hidden">[+ Enviar Solicitud]</button>
-        </div>
+          <!-- CONTENEDOR PRINCIPAL DEL CHAT XAT -->
+          <div class="xat-widget-container">
 
-        <!-- CONTENEDOR XAT PRINCIPAL (CHATS + ROSTER DERECHO) -->
-        <div class="xat-layout-wrap">
-          <!-- PANEL IZQUIERDO: MENSAJES Y COMPOSITOR -->
-          <div class="xat-chat-pane">
-            <div id="messages-container" class="messages-feed xat-messages-feed"></div>
-
-            <!-- COMPOSITOR / CAJA DE MENSAJE ESTILO XAT -->
-            <footer class="composer xat-composer">
-              <div id="reply-bar" class="composer-bar hidden">
-                <span>Respondiendo a <strong id="reply-preview-text"></strong></span>
-                <button type="button" id="btn-cancel-reply" class="btn-mini">[x]</button>
+            <!-- REPRODUCTOR DE RADIO DEL ADMIN / ESTILO XAT CONECTFM -->
+            <div id="xat-radio-bar" class="xat-radio-bar">
+              <div class="xat-radio-left">
+                <span class="xat-radio-icon">📻</span>
+                <div class="xat-radio-text">
+                  <span id="xat-radio-title">ConectFm</span>
+                  <span id="xat-radio-badge" class="xat-radio-badge">OFF</span>
+                </div>
               </div>
+              <div class="xat-radio-actions">
+                <button type="button" id="btn-radio-play" class="btn-radio-ctrl" title="Escuchar Radio">▶</button>
+                <button type="button" id="btn-radio-mute" class="btn-radio-ctrl" title="Silenciar">🔊</button>
+                <input type="range" id="radio-volume" min="0" max="1" step="0.05" value="0.7" class="xat-vol-slider" title="Volumen Radio" />
+                <button type="button" id="btn-admin-radio" class="btn-radio-ctrl hidden" title="Ajustes de Radio (Admin)">⚙️</button>
+              </div>
+              <audio id="xat-radio-audio" preload="none"></audio>
+              <div class="search-wrap">
+                <input type="search" id="search-input" placeholder="Buscar texto o #fotos..." />
+                <button type="button" id="btn-filter-media" class="btn-chip" title="Ver solo fotos">📷 Fotos</button>
+                <button type="button" id="btn-toggle-xat-roster" class="btn-chip mobile-only" title="Ver lista de usuarios">👥 <span id="mobile-online-count">0</span></button>
+              </div>
+            </div>
 
-              <div id="image-preview-bar" class="composer-bar hidden">
-                <div class="img-prep">
-                  <img id="img-prep-thumb" src="" alt="Vista previa" />
-                  <div>
-                    <div id="img-prep-name" class="mono-sm"></div>
-                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;">
-                      <label class="hd-toggle">
-                        <input type="checkbox" id="chk-hd-mode" />
-                        <span>Modo HD (10 min)</span>
-                      </label>
-                      <label class="hd-toggle">
-                        <input type="checkbox" id="chk-nsfw-mode" />
-                        <span style="color:var(--warn-amber)">🔞 Censura +18 / Spoiler</span>
-                      </label>
+            <!-- TÍTULO DE SALA DISCRETO -->
+            <div class="board-banner xat-banner hidden">
+              <div class="banner-info">
+                <h2 id="active-room-title">/gen/ - General</h2>
+                <p id="active-room-desc">Charla libre del grupo</p>
+              </div>
+            </div>
+
+            <div id="channel-pinned-bar" class="pinned-bar hidden">
+              <div class="pinned-tag">📌 FIJADO:</div>
+              <div id="channel-pinned-text" class="pinned-content"></div>
+              <button type="button" id="btn-unpin-msg" class="btn-mini hidden" title="Desfijar">[x]</button>
+            </div>
+
+            <div id="dm-request-banner" class="dm-status-banner hidden">
+              <div>
+                <strong>Solicitud de mensaje privado</strong> — Este usuario te envió un DM antes de ser amigos.
+              </div>
+              <div class="dm-banner-actions">
+                <button type="button" id="btn-dm-accept" class="btn-primary btn-sm">[Aceptar]</button>
+                <button type="button" id="btn-dm-reject" class="btn-secondary btn-sm">[Rechazar]</button>
+                <button type="button" id="btn-dm-block" class="btn-danger btn-sm">[Bloquear]</button>
+              </div>
+            </div>
+
+            <div id="dm-blocked-banner" class="dm-status-banner blocked hidden">
+              <span id="dm-blocked-text">No puedes enviar mensajes en esta conversación.</span>
+              <button type="button" id="btn-dm-readd" class="btn-secondary btn-sm hidden">[+ Enviar Solicitud]</button>
+            </div>
+
+            <!-- VENTANA INTERNA DEL CHAT (CHATS A LA IZQUIERDA + ROSTER A LA DERECHA) -->
+            <div class="xat-layout-wrap">
+
+              <!-- PANEL IZQUIERDO: MENSAJES Y COMPOSITOR -->
+              <div class="xat-chat-pane">
+                <div id="messages-container" class="messages-feed xat-messages-feed"></div>
+
+                <!-- COMPOSITOR / CAJA DE MENSAJE ESTILO XAT -->
+                <footer class="composer xat-composer">
+                  <div id="reply-bar" class="composer-bar hidden">
+                    <span>Respondiendo a <strong id="reply-preview-text"></strong></span>
+                    <button type="button" id="btn-cancel-reply" class="btn-mini">[x]</button>
+                  </div>
+
+                  <!-- BARRA DE GRABACIÓN DE VOZ -->
+                  <div id="voice-record-bar" class="composer-bar voice-record-bar hidden">
+                    <div class="voice-pulse-indicator">
+                      <span class="rec-dot">●</span>
+                      <span>Grabando voz: <strong id="voice-record-timer">0:00</strong></span>
+                      <div class="voice-wave-anim"><span></span><span></span><span></span><span></span><span></span></div>
+                    </div>
+                    <div class="voice-record-btns">
+                      <button type="button" id="btn-cancel-voice" class="btn-secondary btn-sm">[Descartar]</button>
+                      <button type="button" id="btn-send-voice" class="btn-primary btn-sm">[⬆ Enviar]</button>
                     </div>
                   </div>
+
+                  <!-- BARRA PREVIA DE FOTO / VIDEO / AUDIO -->
+                  <div id="media-preview-bar" class="composer-bar hidden">
+                    <div class="media-prep-wrap">
+                      <div id="media-prep-preview">
+                        <img id="img-prep-thumb" src="" alt="Vista previa" class="hidden" />
+                        <video id="vid-prep-thumb" src="" class="hidden" muted playsinline></video>
+                        <div id="aud-prep-thumb" class="aud-prep-icon hidden">🎵</div>
+                      </div>
+                      <div class="media-prep-details">
+                        <div id="media-prep-name" class="mono-sm"></div>
+                        <div id="media-prep-size" class="mono-xs text-muted"></div>
+                        <div class="media-prep-options">
+                          <label id="lbl-hd-mode" class="hd-toggle">
+                            <input type="checkbox" id="chk-hd-mode" />
+                            <span>Modo HD (10 min)</span>
+                          </label>
+                          <label id="lbl-gif-mode" class="hd-toggle hidden">
+                            <input type="checkbox" id="chk-gif-mode" />
+                            <span>🔁 Modo GIF (bucle sin sonido)</span>
+                          </label>
+                          <label class="hd-toggle">
+                            <input type="checkbox" id="chk-nsfw-mode" />
+                            <span style="color:var(--warn-amber)">🔞 Censura +18</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    <button type="button" id="btn-cancel-media" class="btn-mini">[Quitar]</button>
+                  </div>
+
+                  <!-- INDICADOR DE SALA ESTILO XAT (💬 ConectFm) -->
+                  <div class="xat-composer-room-tag">
+                    <span class="room-bubble-icon">💬</span>
+                    <span id="xat-composer-room-name">ConectFm</span>
+                  </div>
+
+                  <!-- BARRA DE EMOJIS ICONICA DE XAT (SOBRE EL INPUT) -->
+                  <div class="xat-smiley-bar-wrap">
+                    <div id="xat-smileys-ribbon" class="xat-smileys-ribbon"></div>
+                    <button type="button" id="btn-emoji-picker" class="xat-more-emojis-btn" title="Catálogo completo de smileys">➕</button>
+                  </div>
+
+                  <div id="emoji-popover" class="emoji-popover hidden xat-palette-popover"></div>
+
+                  <div class="composer-controls xat-composer-controls">
+                    <input type="file" id="file-input" accept="image/*,video/*,audio/*" class="hidden" />
+                    <button type="button" id="btn-attach" class="btn-secondary xat-ctrl-btn" title="Subir foto o video (hasta 25MB)">📷</button>
+                    <button type="button" id="btn-voice-record" class="btn-secondary xat-ctrl-btn" title="Grabar nota de voz (Opus)">🎤</button>
+                    <button type="button" id="btn-open-poll-modal" class="btn-secondary xat-ctrl-btn" title="Crear encuesta">📊</button>
+                    <textarea
+                      id="message-input"
+                      rows="1"
+                      placeholder="Escribe un mensaje... (ej. :) :D (cool) (mad) >texto)"
+                    ></textarea>
+                    <button type="button" id="btn-send" class="btn-primary xat-send-btn" title="Enviar mensaje">⮂</button>
+                  </div>
+                </footer>
+              </div>
+
+              <!-- PANEL DERECHO: ROSTER DE USUARIOS ESTILO XAT (VISITORS / FRIENDS) -->
+              <aside id="xat-roster-pane" class="xat-roster-pane">
+                <div class="xat-roster-header">
+                  <span id="xat-roster-heading">Visitors (<span id="xat-online-count">0</span>)</span>
                 </div>
-                <button type="button" id="btn-cancel-image" class="btn-mini">[Quitar]</button>
-              </div>
+                <div id="xat-roster-list" class="xat-roster-list">
+                  <!-- Se renderizan los usuarios con sus pawns -->
+                </div>
+                <div class="xat-roster-tabs">
+                  <button type="button" id="xat-tab-visitors" class="xat-tab-btn active" data-rtab="visitors">Visitors</button>
+                  <button type="button" id="xat-tab-friends" class="xat-tab-btn" data-rtab="friends">Friends</button>
+                </div>
+                <!-- 4 MINI ICONOS ESTILO XAT: VISITANTES, AYUDA, PLANETA, LOGO -->
+                <div class="xat-roster-mini-icons">
+                  <span class="xat-mini-icon" title="Visitantes">👥</span>
+                  <span class="xat-mini-icon" title="Ayuda">❓</span>
+                  <span class="xat-mini-icon" title="DeltaChat">🪐</span>
+                  <span class="xat-mini-icon xat-text-badge" title="xat">xat</span>
+                </div>
+                <div class="xat-roster-actions">
+                  <button type="button" id="btn-xat-boards" class="xat-action-btn" title="Abrir lista de tablones">Get a Chat Box</button>
+                  <button type="button" id="btn-xat-logout" class="xat-action-btn" title="Cerrar sesión">Sign Out</button>
+                </div>
+              </aside>
+            </div>
 
-              <!-- BARRA DE EMOJIS ICONICA DE XAT (SOBRE EL INPUT) -->
-              <div class="xat-smiley-bar-wrap">
-                <div id="xat-smileys-ribbon" class="xat-smileys-ribbon"></div>
-                <button type="button" id="btn-emoji-picker" class="xat-more-emojis-btn" title="Catálogo completo de smileys">➕</button>
+            <!-- PIE DE CHAT XAT CLÁSICO -->
+            <div class="xat-bottom-footer">
+              <div class="xat-footer-tagline">
+                <strong id="xat-footer-room-name">ConectFm</strong> <span class="footer-note">(Nota: Este chat no está dirigido por xat)</span>
               </div>
-
-              <div id="emoji-popover" class="emoji-popover hidden xat-palette-popover"></div>
-
-              <div class="composer-controls xat-composer-controls">
-                <input type="file" id="file-input" accept="image/*" class="hidden" />
-                <button type="button" id="btn-attach" class="btn-secondary xat-ctrl-btn" title="Subir foto">📷</button>
-                <textarea
-                  id="message-input"
-                  rows="1"
-                  placeholder="Escribe un mensaje... (ej. :) :D (cool) (mad) >texto)"
-                ></textarea>
-                <button type="button" id="btn-send" class="btn-primary xat-send-btn" title="Enviar mensaje">↵</button>
+              <div class="xat-footer-promoted">
+                Grupos promocionados: <span>GOSS</span> | <span>ConectFm</span> | <span>ZONA_DE_KERENDONES</span> | <span>Inter_ritmo</span> | <span>LAMUSICAUNSENTIMIENTOYTU</span> | <span>RadioMexico</span> | <span>FREEDOM_IN_YOUR_SOUL</span> | <a href="#" id="link-promo-group" onclick="alert('DeltaChat: Puedes crear tu propio grupo desde el menú Grupos / Tablones'); return false;">Promocionar mi grupo</a>
               </div>
-            </footer>
+            </div>
+
           </div>
 
-          <!-- PANEL DERECHO: ROSTER DE USUARIOS ESTILO XAT (VISITORS / FRIENDS) -->
-          <aside id="xat-roster-pane" class="xat-roster-pane">
-            <div class="xat-roster-header">
-              <span id="xat-roster-heading">Visitors (<span id="xat-online-count">0</span>)</span>
-            </div>
-            <div id="xat-roster-list" class="xat-roster-list">
-              <!-- Se renderizan los usuarios con sus pawns -->
-            </div>
-            <div class="xat-roster-tabs">
-              <button type="button" id="xat-tab-visitors" class="xat-tab-btn active" data-rtab="visitors">Visitors</button>
-              <button type="button" id="xat-tab-friends" class="xat-tab-btn" data-rtab="friends">Friends</button>
-            </div>
-            <div class="xat-roster-actions">
-              <button type="button" id="btn-xat-boards" class="xat-action-btn" title="Abrir lista de tablones">Tablones</button>
-              <button type="button" id="btn-xat-logout" class="xat-action-btn" title="Cerrar sesión">Sign Out</button>
+          <!-- TARJETA LATERAL DERECHA "¿NUEVO EN XAT?" -->
+          <aside class="xat-promo-card desktop-only">
+            <h3 class="xat-promo-title">¿Nuevo en xat?</h3>
+            <p class="xat-promo-desc">
+              Encuentra un grupo que comparta tus intereses. Crea tu propio grupo de xat. Obtén y comercializa Powers. Juega juegos multijugador. Diseña tu propio personaje de avatar animado. Envía stickers con tu texto personalizado.
+            </p>
+            <button type="button" id="btn-promo-learn-more" class="btn-xat-learn-more" onclick="alert('DeltaChat Oscuro: Chatea en tiempo real con emojis 3D de xat, notas de voz ultraligeras, videos de 25MB y encuestas en vivo.');">
+              <span class="learn-icon">❓</span> aprende más
+            </button>
+            <div class="xat-promo-social">
+              <span>Sígue a xat en:</span>
+              <a href="#" class="social-link" title="X (Twitter)">𝕏</a>
+              <a href="#" class="social-link" title="Facebook">ⓕ</a>
+              <a href="#" class="social-link" title="Instagram">📷</a>
             </div>
           </aside>
+
+          <!-- FLECHA CARRUSEL DERECHA -->
+          <button type="button" class="xat-carousel-arrow arrow-right" id="btn-carousel-next" title="Siguiente">›</button>
+
         </div>
       </main>
     </div>
@@ -652,6 +777,60 @@
     </div>
     <div class="lightbox-stage">
       <img id="lightbox-img" src="" alt="Vista ampliada" />
+    </div>
+  </div>
+
+  <!-- MODAL CREAR ENCUESTA (POLL) -->
+  <div id="poll-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>📊 Crear Encuesta en el Tablón</h3>
+        <button type="button" class="btn-mini modal-close" data-close="poll-modal">[x]</button>
+      </div>
+      <form id="poll-form" class="modal-body stacked-form">
+        <label>
+          Pregunta de la Encuesta
+          <input type="text" id="poll-question-input" required maxlength="200" placeholder="¿Qué tema votamos hoy?" />
+        </label>
+        <div class="poll-options-builder">
+          <label style="font-weight:bold;margin-bottom:6px;display:block;">Opciones (2 a 5):</label>
+          <div id="poll-options-list" class="poll-options-inputs" style="display:flex;flex-direction:column;gap:8px;">
+            <div class="poll-opt-row" style="display:flex;gap:6px;">
+              <input type="text" class="poll-opt-input" required placeholder="Opción 1" maxlength="100" />
+            </div>
+            <div class="poll-opt-row" style="display:flex;gap:6px;">
+              <input type="text" class="poll-opt-input" required placeholder="Opción 2" maxlength="100" />
+            </div>
+          </div>
+          <button type="button" id="btn-add-poll-opt" class="btn-secondary btn-sm" style="margin-top:8px;">+ Agregar Opción</button>
+        </div>
+        <button type="submit" class="btn-primary" style="margin-top:14px;">Publicar Encuesta</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL TRANSMISIÓN DE RADIO (ADMIN) -->
+  <div id="admin-radio-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>📻 Sintonizador de Radio / Música Admin</h3>
+        <button type="button" class="btn-mini modal-close" data-close="admin-radio-modal">[x]</button>
+      </div>
+      <form id="admin-radio-form" class="modal-body stacked-form">
+        <label>
+          Nombre de la Estación / Emisora
+          <input type="text" id="admin-radio-title-input" required maxlength="100" placeholder="ej. ConectFm / Delta Retro" value="ConectFm" />
+        </label>
+        <label>
+          URL del Stream de Audio en Vivo (MP3, AAC, Shoutcast, Icecast, etc.)
+          <input type="url" id="admin-radio-url-input" placeholder="https://stream.zeno.fm/... o URL directa de audio" />
+        </label>
+        <label class="hd-toggle">
+          <input type="checkbox" id="admin-radio-active-chk" checked />
+          <span>Transmisión activa para todos los usuarios</span>
+        </label>
+        <button type="submit" class="btn-primary" style="margin-top:12px;">Guardar y Sincronizar Radio</button>
+      </form>
     </div>
   </div>
 

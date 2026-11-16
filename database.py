@@ -131,15 +131,48 @@ def init_db() -> None:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS polls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_id INTEGER NOT NULL,
+                creator_id INTEGER NOT NULL,
+                question TEXT NOT NULL,
+                is_closed INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS poll_options (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                poll_id INTEGER NOT NULL,
+                option_text TEXT NOT NULL,
+                votes_count INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS poll_votes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                poll_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                option_id INTEGER NOT NULL,
+                created_at REAL NOT NULL,
+                UNIQUE(poll_id, user_id)
+            );
             """
         )
 
-        # Ensure is_read and is_nsfw columns exist on pre-existing direct_messages table
+        # Ensure columns exist on pre-existing direct_messages table
         dm_cols = {r["name"] for r in conn.execute("PRAGMA table_info(direct_messages)").fetchall()}
         if "is_read" not in dm_cols:
             conn.execute("ALTER TABLE direct_messages ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0")
         if "is_nsfw" not in dm_cols:
             conn.execute("ALTER TABLE direct_messages ADD COLUMN is_nsfw INTEGER NOT NULL DEFAULT 0")
+        if "media_type" not in dm_cols:
+            conn.execute("ALTER TABLE direct_messages ADD COLUMN media_type TEXT NOT NULL DEFAULT 'text'")
+        if "media_duration" not in dm_cols:
+            conn.execute("ALTER TABLE direct_messages ADD COLUMN media_duration REAL DEFAULT NULL")
+        if "is_gif_mode" not in dm_cols:
+            conn.execute("ALTER TABLE direct_messages ADD COLUMN is_gif_mode INTEGER NOT NULL DEFAULT 0")
+        if "poll_id" not in dm_cols:
+            conn.execute("ALTER TABLE direct_messages ADD COLUMN poll_id INTEGER DEFAULT NULL")
 
         # Migrate channels table schema if missing access_type
         ch_cols = {r["name"] for r in conn.execute("PRAGMA table_info(channels)").fetchall()}
@@ -150,10 +183,18 @@ def init_db() -> None:
         if "pinned_message_id" not in ch_cols:
             conn.execute("ALTER TABLE channels ADD COLUMN pinned_message_id INTEGER DEFAULT NULL")
 
-        # Migrate messages table schema if missing is_nsfw
+        # Migrate messages table schema
         msg_cols = {r["name"] for r in conn.execute("PRAGMA table_info(messages)").fetchall()}
         if "is_nsfw" not in msg_cols:
             conn.execute("ALTER TABLE messages ADD COLUMN is_nsfw INTEGER NOT NULL DEFAULT 0")
+        if "media_type" not in msg_cols:
+            conn.execute("ALTER TABLE messages ADD COLUMN media_type TEXT NOT NULL DEFAULT 'text'")
+        if "media_duration" not in msg_cols:
+            conn.execute("ALTER TABLE messages ADD COLUMN media_duration REAL DEFAULT NULL")
+        if "is_gif_mode" not in msg_cols:
+            conn.execute("ALTER TABLE messages ADD COLUMN is_gif_mode INTEGER NOT NULL DEFAULT 0")
+        if "poll_id" not in msg_cols:
+            conn.execute("ALTER TABLE messages ADD COLUMN poll_id INTEGER DEFAULT NULL")
 
         for slug, name, desc in DEFAULT_CHANNELS:
             conn.execute(
@@ -165,6 +206,15 @@ def init_db() -> None:
         conn.execute(
             "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('last_backup_ym', ?)",
             (current_ym,),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('radio_stream_title', 'ConectFm')",
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('radio_stream_url', '')",
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('radio_active', '0')",
         )
 
 
@@ -392,9 +442,11 @@ def _format_channel_row(
     reactions: list[dict[str, Any]],
     reply_preview: Optional[dict[str, Any]],
     for_admin: bool,
+    poll_data: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     u = users_map.get(r["user_id"]) if r["user_id"] is not None else None
     author_alias = u["alias"] if u else (r["author_alias_snapshot"] or "Usuario Eliminado")
+    media_type = r["media_type"] if ("media_type" in r.keys() and r["media_type"]) else ("image" if r["image_url"] else "text")
     msg: dict[str, Any] = {
         "id": r["id"],
         "channel_id": r["channel_id"],
@@ -412,6 +464,11 @@ def _format_channel_row(
         "expires_at": r["expires_at"],
         "is_expired": bool(r["is_expired"]),
         "is_nsfw": bool(r["is_nsfw"]) if "is_nsfw" in r.keys() else False,
+        "media_type": media_type,
+        "media_duration": r["media_duration"] if "media_duration" in r.keys() else None,
+        "is_gif_mode": bool(r["is_gif_mode"]) if "is_gif_mode" in r.keys() else False,
+        "poll_id": r["poll_id"] if "poll_id" in r.keys() else None,
+        "poll": poll_data,
         "reply_to_id": r["reply_to_id"],
         "reply_preview": reply_preview,
         "reactions": reactions,
@@ -437,6 +494,10 @@ def create_channel_message(
     expires_at: Optional[float] = None,
     is_nsfw: bool = False,
     reply_to_id: Optional[int] = None,
+    media_type: str = "text",
+    media_duration: Optional[float] = None,
+    is_gif_mode: bool = False,
+    poll_id: Optional[int] = None,
 ) -> int:
     now = time.time()
     if user_id is not None:
@@ -449,8 +510,9 @@ def create_channel_message(
             INSERT INTO messages (
                 channel_id, user_id, author_alias_snapshot, is_system, content,
                 image_url, image_name, image_size_kb, image_dims,
-                is_hd, expires_at, is_expired, is_nsfw, reply_to_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+                is_hd, expires_at, is_expired, is_nsfw, reply_to_id, created_at,
+                media_type, media_duration, is_gif_mode, poll_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 channel_id,
@@ -467,6 +529,10 @@ def create_channel_message(
                 1 if is_nsfw else 0,
                 reply_to_id,
                 now,
+                media_type,
+                media_duration,
+                1 if is_gif_mode else 0,
+                poll_id,
             ),
         )
         return cur.lastrowid
@@ -501,8 +567,11 @@ def get_channel_message_by_id(
                 "image_name": reply_preview["image_name"],
             }
         reactions_map = _attach_reactions(conn, "channel", [msg_id], viewer_id)
+        poll_data = None
+        if "poll_id" in row.keys() and row["poll_id"]:
+            poll_data = get_poll_by_id(row["poll_id"], viewer_id=viewer_id)
         return _format_channel_row(
-            row, users_map, reactions_map.get(msg_id, []), reply_preview, for_admin
+            row, users_map, reactions_map.get(msg_id, []), reply_preview, for_admin, poll_data=poll_data
         )
 
 
@@ -537,6 +606,13 @@ def get_channel_messages(
         ids = [r["id"] for r in rows]
         reactions_map = _attach_reactions(conn, "channel", ids, viewer_id)
 
+        poll_ids = [r["poll_id"] for r in rows if "poll_id" in r.keys() and r["poll_id"]]
+        poll_map: dict[int, dict[str, Any]] = {}
+        for pid in set(poll_ids):
+            p = get_poll_by_id(pid, viewer_id=viewer_id)
+            if p:
+                poll_map[pid] = p
+
         results: list[dict[str, Any]] = []
         term = search.strip().lower() if search and search.strip() else None
         for r in rows:
@@ -550,8 +626,9 @@ def get_channel_messages(
                     "content": rp_raw["content"],
                     "image_name": rp_raw["image_name"],
                 }
+            p_data = poll_map.get(r["poll_id"]) if "poll_id" in r.keys() and r["poll_id"] else None
             formatted = _format_channel_row(
-                r, users_map, reactions_map.get(r["id"], []), rp, for_admin
+                r, users_map, reactions_map.get(r["id"], []), rp, for_admin, poll_data=p_data
             )
             if term:
                 if term not in (formatted["content"] or "").lower() and term not in formatted["alias"].lower():
@@ -878,7 +955,12 @@ def create_direct_message(
     image_dims: Optional[str] = None,
     is_hd: bool = False,
     expires_at: Optional[float] = None,
+    is_nsfw: bool = False,
     reply_to_id: Optional[int] = None,
+    media_type: str = "text",
+    media_duration: Optional[float] = None,
+    is_gif_mode: bool = False,
+    poll_id: Optional[int] = None,
 ) -> int:
     ensure_pending_dm_friendship(sender_id, receiver_id)
     now = time.time()
@@ -887,8 +969,9 @@ def create_direct_message(
             """
             INSERT INTO direct_messages (
                 sender_id, receiver_id, content, image_url, image_name,
-                image_size_kb, image_dims, is_hd, expires_at, is_expired, reply_to_id, is_read, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)
+                image_size_kb, image_dims, is_hd, expires_at, is_expired, is_nsfw,
+                reply_to_id, is_read, created_at, media_type, media_duration, is_gif_mode, poll_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0, ?, ?, ?, ?, ?)
             """,
             (
                 sender_id,
@@ -900,8 +983,13 @@ def create_direct_message(
                 image_dims,
                 1 if is_hd else 0,
                 expires_at,
+                1 if is_nsfw else 0,
                 reply_to_id,
                 now,
+                media_type,
+                media_duration,
+                1 if is_gif_mode else 0,
+                poll_id,
             ),
         )
         return cur.lastrowid
@@ -913,8 +1001,10 @@ def _format_dm_row(
     reactions: list[dict[str, Any]],
     reply_preview: Optional[dict[str, Any]],
     for_admin: bool,
+    poll_data: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     u = users_map.get(r["sender_id"])
+    media_type = r["media_type"] if ("media_type" in r.keys() and r["media_type"]) else ("image" if r["image_url"] else "text")
     msg: dict[str, Any] = {
         "id": r["id"],
         "sender_id": r["sender_id"],
@@ -932,6 +1022,11 @@ def _format_dm_row(
         "expires_at": r["expires_at"],
         "is_expired": bool(r["is_expired"]),
         "is_nsfw": bool(r["is_nsfw"]) if "is_nsfw" in r.keys() else False,
+        "media_type": media_type,
+        "media_duration": r["media_duration"] if "media_duration" in r.keys() else None,
+        "is_gif_mode": bool(r["is_gif_mode"]) if "is_gif_mode" in r.keys() else False,
+        "poll_id": r["poll_id"] if "poll_id" in r.keys() else None,
+        "poll": poll_data,
         "reply_to_id": r["reply_to_id"],
         "reply_preview": reply_preview,
         "reactions": reactions,
@@ -970,8 +1065,11 @@ def get_dm_by_id(
                 "image_name": reply_preview["image_name"],
             }
         reactions_map = _attach_reactions(conn, "dm", [dm_id], viewer_id)
+        poll_data = None
+        if "poll_id" in row.keys() and row["poll_id"]:
+            poll_data = get_poll_by_id(row["poll_id"], viewer_id=viewer_id)
         return _format_dm_row(
-            row, users_map, reactions_map.get(dm_id, []), reply_preview, for_admin
+            row, users_map, reactions_map.get(dm_id, []), reply_preview, for_admin, poll_data=poll_data
         )
 
 
@@ -1004,11 +1102,19 @@ def get_direct_messages(
                 reply_ids,
             ).fetchall():
                 reply_raw_map[rr["id"]] = dict(rr)
-                user_ids.append(rr["sender_id"])
+                if rr["sender_id"]:
+                    user_ids.append(rr["sender_id"])
 
         users_map = auth_database.get_users_map(user_ids)
         ids = [r["id"] for r in rows]
         reactions_map = _attach_reactions(conn, "dm", ids, viewer_id)
+
+        poll_ids = [r["poll_id"] for r in rows if "poll_id" in r.keys() and r["poll_id"]]
+        poll_map: dict[int, dict[str, Any]] = {}
+        for pid in set(poll_ids):
+            p = get_poll_by_id(pid, viewer_id=viewer_id)
+            if p:
+                poll_map[pid] = p
 
         results: list[dict[str, Any]] = []
         term = search.strip().lower() if search and search.strip() else None
@@ -1016,15 +1122,16 @@ def get_direct_messages(
             rp_raw = reply_raw_map.get(r["reply_to_id"]) if r["reply_to_id"] else None
             rp = None
             if rp_raw:
-                ru = users_map.get(rp_raw["sender_id"])
+                ru = users_map.get(rp_raw.get("sender_id"))
                 rp = {
                     "id": rp_raw["id"],
                     "alias": ru["alias"] if ru else "Usuario",
                     "content": rp_raw["content"],
                     "image_name": rp_raw["image_name"],
                 }
+            p_data = poll_map.get(r["poll_id"]) if "poll_id" in r.keys() and r["poll_id"] else None
             formatted = _format_dm_row(
-                r, users_map, reactions_map.get(r["id"], []), rp, for_admin
+                r, users_map, reactions_map.get(r["id"], []), rp, for_admin, poll_data=p_data
             )
             if term:
                 if term not in (formatted["content"] or "").lower() and term not in formatted["alias"].lower():
@@ -1164,12 +1271,16 @@ def fetch_all_messages_for_backup() -> dict[str, Any]:
     msgs_by_ch: dict[int, list[dict[str, Any]]] = {ch["id"]: [] for ch in channels}
     for m in raw_msgs:
         u = users_map.get(m["user_id"]) if m["user_id"] else None
+        p_id = m["poll_id"] if "poll_id" in m.keys() else None
+        p_data = get_poll_by_id(p_id) if p_id else None
         msgs_by_ch.setdefault(m["channel_id"], []).append(
             {
                 "id": m["id"],
                 "content": m["content"],
                 "created_at": m["created_at"],
                 "is_system": m["is_system"],
+                "media_type": m["media_type"] if "media_type" in m.keys() else "text",
+                "poll": p_data,
                 "username": u["username"] if u else m["author_alias_snapshot"],
                 "alias": u["alias"] if u else m["author_alias_snapshot"],
             }
@@ -1183,11 +1294,15 @@ def fetch_all_messages_for_backup() -> dict[str, Any]:
     for d in raw_dms:
         su = users_map.get(d["sender_id"])
         ru = users_map.get(d["receiver_id"])
+        p_id = d["poll_id"] if "poll_id" in d.keys() else None
+        p_data = get_poll_by_id(p_id) if p_id else None
         dm_logs.append(
             {
                 "id": d["id"],
                 "content": d["content"],
                 "created_at": d["created_at"],
+                "media_type": d["media_type"] if "media_type" in d.keys() else "text",
+                "poll": p_data,
                 "sender_username": su["username"] if su else f"user_{d['sender_id']}",
                 "sender_alias": su["alias"] if su else f"user_{d['sender_id']}",
                 "receiver_username": ru["username"] if ru else f"user_{d['receiver_id']}",
@@ -1210,6 +1325,9 @@ def reset_all_messages_for_new_month(new_ym: str) -> list[str]:
         conn.execute("DELETE FROM reactions")
         conn.execute("DELETE FROM messages")
         conn.execute("DELETE FROM direct_messages")
+        conn.execute("DELETE FROM poll_votes")
+        conn.execute("DELETE FROM poll_options")
+        conn.execute("DELETE FROM polls")
         conn.execute(
             "INSERT INTO system_settings (key, value) VALUES ('last_backup_ym', ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -1229,3 +1347,232 @@ def reset_all_messages_for_new_month(new_ym: str) -> list[str]:
                 ),
             )
     return image_paths
+
+
+# --- RADIO STREAM SETTINGS ---
+
+def get_radio_stream() -> dict[str, Any]:
+    """Retrieve current shared radio stream configuration."""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT key, value FROM system_settings WHERE key LIKE 'radio_%'").fetchall()
+        data = {r["key"]: r["value"] for r in rows}
+        return {
+            "title": data.get("radio_stream_title", "ConectFm"),
+            "url": data.get("radio_stream_url", ""),
+            "active": data.get("radio_active", "0") in ("1", "true", "True"),
+        }
+
+
+def set_radio_stream(url: str, title: str = "ConectFm", active: bool = True) -> dict[str, Any]:
+    """Set the radio stream URL, station title, and active state (Admin only)."""
+    clean_title = (title or "ConectFm").strip()
+    clean_url = (url or "").strip()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO system_settings (key, value) VALUES ('radio_stream_title', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (clean_title,),
+        )
+        conn.execute(
+            "INSERT INTO system_settings (key, value) VALUES ('radio_stream_url', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (clean_url,),
+        )
+        conn.execute(
+            "INSERT INTO system_settings (key, value) VALUES ('radio_active', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            ("1" if active else "0",),
+        )
+    return {
+        "title": clean_title,
+        "url": clean_url,
+        "active": bool(active),
+    }
+
+
+# --- POLLS (ENCUESTAS) ---
+
+def create_poll(
+    channel_id: int,
+    creator_id: int,
+    question: str,
+    options: list[str],
+) -> dict[str, Any]:
+    """Create a new poll in a channel and publish the corresponding message."""
+    q = (question or "").strip()
+    if not q:
+        raise ValueError("La pregunta de la encuesta no puede estar vacía.")
+    clean_options = [opt.strip() for opt in options if opt and opt.strip()]
+    if len(clean_options) < 2:
+        raise ValueError("La encuesta debe tener al menos 2 opciones.")
+    if len(clean_options) > 5:
+        raise ValueError("La encuesta puede tener un máximo de 5 opciones.")
+
+    now = time.time()
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO polls (channel_id, creator_id, question, is_closed, created_at) VALUES (?, ?, ?, 0, ?)",
+            (channel_id, creator_id, q, now),
+        )
+        poll_id = cur.lastrowid
+        for opt_text in clean_options:
+            conn.execute(
+                "INSERT INTO poll_options (poll_id, option_text, votes_count) VALUES (?, ?, 0)",
+                (poll_id, opt_text),
+            )
+
+        u = auth_database.get_user_by_id(creator_id)
+        alias = u["alias"] if u else "Sistema"
+        m_cur = conn.execute(
+            """
+            INSERT INTO messages (
+                channel_id, user_id, author_alias_snapshot, is_system, content,
+                media_type, poll_id, created_at
+            ) VALUES (?, ?, ?, 0, ?, 'poll', ?, ?)
+            """,
+            (channel_id, creator_id, alias, f"📊 [Encuesta] {q}", poll_id, now),
+        )
+
+    res = get_poll_by_id(poll_id, viewer_id=creator_id)
+    if not res:
+        raise RuntimeError("Error al recuperar la encuesta recién creada.")
+    return res
+
+
+def get_poll_by_id(poll_id: int, viewer_id: Optional[int] = None) -> Optional[dict[str, Any]]:
+    """Retrieve full details of a poll including percentage calculation and viewer vote status."""
+    if not poll_id:
+        return None
+    with get_conn() as conn:
+        p = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
+        if not p:
+            return None
+        opts = conn.execute(
+            "SELECT id, option_text, votes_count FROM poll_options WHERE poll_id = ? ORDER BY id ASC",
+            (poll_id,),
+        ).fetchall()
+
+        total_votes = sum(o["votes_count"] for o in opts)
+        options_data = []
+        for o in opts:
+            pct = round((o["votes_count"] / total_votes * 100), 1) if total_votes > 0 else 0.0
+            options_data.append({
+                "id": o["id"],
+                "text": o["option_text"],
+                "votes": o["votes_count"],
+                "percentage": pct,
+            })
+
+        user_voted_id = None
+        if viewer_id is not None:
+            v = conn.execute(
+                "SELECT option_id FROM poll_votes WHERE poll_id = ? AND user_id = ?",
+                (poll_id, viewer_id),
+            ).fetchone()
+            if v:
+                user_voted_id = v["option_id"]
+
+        u = auth_database.get_user_by_id(p["creator_id"])
+        return {
+            "id": p["id"],
+            "channel_id": p["channel_id"],
+            "creator_id": p["creator_id"],
+            "creator_alias": u["alias"] if u else "Usuario",
+            "question": p["question"],
+            "is_closed": bool(p["is_closed"]),
+            "created_at": p["created_at"],
+            "total_votes": total_votes,
+            "options": options_data,
+            "user_voted_option_id": user_voted_id,
+        }
+
+
+def vote_poll(poll_id: int, user_id: int, option_id: int) -> dict[str, Any]:
+    """Cast or update a vote on a poll."""
+    with get_conn() as conn:
+        p = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
+        if not p:
+            raise ValueError("Encuesta no encontrada.")
+        if p["is_closed"]:
+            raise ValueError("Esta encuesta ya está cerrada y no acepta más votos.")
+
+        opt = conn.execute(
+            "SELECT id FROM poll_options WHERE id = ? AND poll_id = ?",
+            (option_id, poll_id),
+        ).fetchone()
+        if not opt:
+            raise ValueError("Opción no válida para esta encuesta.")
+
+        now = time.time()
+        conn.execute(
+            """
+            INSERT INTO poll_votes (poll_id, user_id, option_id, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(poll_id, user_id) DO UPDATE SET option_id = excluded.option_id, created_at = excluded.created_at
+            """,
+            (poll_id, user_id, option_id, now),
+        )
+
+        opts = conn.execute("SELECT id FROM poll_options WHERE poll_id = ?", (poll_id,)).fetchall()
+        for o in opts:
+            cnt = conn.execute(
+                "SELECT COUNT(*) as c FROM poll_votes WHERE option_id = ?",
+                (o["id"],),
+            ).fetchone()["c"]
+            conn.execute(
+                "UPDATE poll_options SET votes_count = ? WHERE id = ?",
+                (cnt, o["id"]),
+            )
+
+    res = get_poll_by_id(poll_id, viewer_id=user_id)
+    if not res:
+        raise RuntimeError("Error al recuperar la encuesta actualizada.")
+    return res
+
+
+def close_poll(poll_id: int, user_id: int, is_admin: bool) -> dict[str, Any]:
+    """Close a poll so no more votes can be cast."""
+    with get_conn() as conn:
+        p = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
+        if not p:
+            raise ValueError("Encuesta no encontrada.")
+        if not is_admin and p["creator_id"] != user_id:
+            raise PermissionError("Solo el creador o un administrador pueden cerrar esta encuesta.")
+        conn.execute("UPDATE polls SET is_closed = 1 WHERE id = ?", (poll_id,))
+
+    res = get_poll_by_id(poll_id, viewer_id=user_id)
+    if not res:
+        raise RuntimeError("Error al recuperar la encuesta cerrada.")
+    return res
+
+
+# --- MEDIA CLEANUP (RETENTION 30 DAYS WITH PINNED EXEMPTION) ---
+
+def cleanup_expired_media(max_age_days: int = 30) -> dict[str, Any]:
+    """Delete unpinned images, videos, and audios older than max_age_days."""
+    cutoff = time.time() - (max_age_days * 86400)
+    cleaned = 0
+    with get_conn() as conn:
+        pinned_rows = conn.execute("SELECT pinned_message_id FROM channels WHERE pinned_message_id IS NOT NULL").fetchall()
+        pinned_ids = {r["pinned_message_id"] for r in pinned_rows}
+
+        rows = conn.execute(
+            "SELECT id, image_url, media_type FROM messages WHERE created_at < ? AND image_url IS NOT NULL AND is_expired = 0",
+            (cutoff,),
+        ).fetchall()
+
+        for r in rows:
+            if r["id"] in pinned_ids:
+                continue
+            media_url = r["image_url"]
+            if media_url:
+                try:
+                    import media_service
+                    media_service.delete_media_file(media_url)
+                except Exception:
+                    pass
+                conn.execute("UPDATE messages SET is_expired = 1, image_url = NULL WHERE id = ?", (r["id"],))
+                cleaned += 1
+
+    return {"cleaned_count": cleaned}
+

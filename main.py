@@ -319,6 +319,22 @@ class ChannelPinRequest(BaseModel):
     message_id: Optional[int] = None
 
 
+class CreatePollRequest(BaseModel):
+    channel_id: int
+    question: str = Field(min_length=1, max_length=200)
+    options: list[str] = Field(min_length=2, max_length=5)
+
+
+class VotePollRequest(BaseModel):
+    option_id: int
+
+
+class SetRadioRequest(BaseModel):
+    url: str = Field(default="", max_length=500)
+    title: str = Field(default="ConectFm", max_length=100)
+    active: bool = True
+
+
 # --- AUTH DEPENDENCIES ---
 
 async def get_current_user(
@@ -736,9 +752,117 @@ async def upload_image(
             raw_bytes, file.filename or "imagen.webp", is_hd=is_hd
         )
         meta["is_nsfw"] = bool(is_nsfw)
+        meta["media_type"] = "image"
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return meta
+
+
+@app.post("/api/upload-media")
+async def upload_media(
+    file: UploadFile = File(...),
+    media_type: str = Form(default="video"),
+    thumbnail: Optional[UploadFile] = File(default=None),
+    duration: Optional[float] = Form(default=None),
+    is_gif_mode: bool = Form(default=False),
+    is_nsfw: bool = Form(default=False),
+    user: dict[str, Any] = Depends(get_current_user),
+):
+    if user.get("must_change_password"):
+        raise HTTPException(status_code=403, detail="Debes cambiar tu contraseña antes de continuar.")
+    raw_bytes = await file.read()
+    thumb_bytes = await thumbnail.read() if thumbnail else None
+    try:
+        import media_service
+        meta = media_service.save_uploaded_media(
+            raw_bytes=raw_bytes,
+            original_filename=file.filename or f"media.{media_type}",
+            media_type=media_type,
+            thumbnail_bytes=thumb_bytes,
+            duration_seconds=duration,
+            is_gif_mode=is_gif_mode,
+            is_nsfw=is_nsfw,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return meta
+
+
+# --- RADIO ENDPOINTS ---
+
+@app.get("/api/radio")
+async def get_radio_stream():
+    return database.get_radio_stream()
+
+
+@app.post("/api/admin/radio")
+async def admin_set_radio_stream(
+    payload: SetRadioRequest, admin: dict[str, Any] = Depends(require_admin)
+):
+    res = database.set_radio_stream(url=payload.url, title=payload.title, active=payload.active)
+    await manager.broadcast_json({"type": "radio_updated", "radio": res})
+    return res
+
+
+# --- POLLS ENDPOINTS ---
+
+@app.post("/api/polls")
+async def create_poll_endpoint(
+    payload: CreatePollRequest, user: dict[str, Any] = Depends(get_current_user)
+):
+    if user.get("must_change_password"):
+        raise HTTPException(status_code=403, detail="Debes cambiar tu contraseña antes de continuar.")
+    can_post, reason = database.can_user_post_in_channel(
+        user["id"], payload.channel_id, is_admin=(user["role"] == "admin")
+    )
+    if not can_post:
+        raise HTTPException(status_code=403, detail=reason)
+    try:
+        poll = database.create_poll(
+            channel_id=payload.channel_id,
+            creator_id=user["id"],
+            question=payload.question,
+            options=payload.options,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # Find the message ID created for this poll and broadcast it
+    with database.get_conn() as conn:
+        m_row = conn.execute("SELECT id FROM messages WHERE poll_id = ?", (poll["id"],)).fetchone()
+        if m_row:
+            await manager.broadcast_channel_message(m_row["id"])
+
+    return {"poll": poll}
+
+
+@app.post("/api/polls/{poll_id}/vote")
+async def vote_poll_endpoint(
+    poll_id: int, payload: VotePollRequest, user: dict[str, Any] = Depends(get_current_user)
+):
+    if user.get("must_change_password"):
+        raise HTTPException(status_code=403, detail="Debes cambiar tu contraseña antes de continuar.")
+    try:
+        updated_poll = database.vote_poll(poll_id, user["id"], payload.option_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await manager.broadcast_json({"type": "poll_updated", "poll": updated_poll})
+    return {"poll": updated_poll}
+
+
+@app.post("/api/polls/{poll_id}/close")
+async def close_poll_endpoint(
+    poll_id: int, user: dict[str, Any] = Depends(get_current_user)
+):
+    if user.get("must_change_password"):
+        raise HTTPException(status_code=403, detail="Debes cambiar tu contraseña antes de continuar.")
+    is_admin = user["role"] == "admin"
+    try:
+        closed_poll = database.close_poll(poll_id, user["id"], is_admin)
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await manager.broadcast_json({"type": "poll_updated", "poll": closed_poll})
+    return {"poll": closed_poll}
 
 
 @app.delete("/api/messages/{msg_id}")
@@ -1136,19 +1260,25 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(default="")):
                     continue
 
                 is_nsfw = bool(data.get("is_nsfw")) or (bool(image_meta.get("is_nsfw")) if image_meta else False)
+                media_type = data.get("media_type") or (image_meta.get("media_type") if image_meta else ("image" if image_meta else "text"))
+                media_duration = data.get("media_duration") or (image_meta.get("media_duration") if image_meta else None)
+                is_gif_mode = bool(data.get("is_gif_mode") or (image_meta.get("is_gif_mode") if image_meta else False))
 
                 msg_id = database.create_channel_message(
                     channel_id=channel_id,
                     user_id=user["id"],
                     content=content,
-                    image_url=image_meta.get("image_url") if image_meta else None,
-                    image_name=image_meta.get("image_name") if image_meta else None,
-                    image_size_kb=image_meta.get("image_size_kb") if image_meta else None,
+                    image_url=image_meta.get("image_url") or image_meta.get("media_url") if image_meta else None,
+                    image_name=image_meta.get("image_name") or image_meta.get("media_name") if image_meta else None,
+                    image_size_kb=image_meta.get("image_size_kb") or image_meta.get("media_size_kb") if image_meta else None,
                     image_dims=image_meta.get("image_dims") if image_meta else None,
                     is_hd=bool(image_meta.get("is_hd")) if image_meta else False,
                     expires_at=image_meta.get("expires_at") if image_meta else None,
                     is_nsfw=is_nsfw,
                     reply_to_id=int(reply_to_id) if reply_to_id else None,
+                    media_type=media_type,
+                    media_duration=media_duration,
+                    is_gif_mode=is_gif_mode,
                 )
                 await manager.broadcast_channel_message(msg_id)
 
@@ -1164,17 +1294,26 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(default="")):
                     await ws.send_json({"type": "error", "detail": reason})
                     continue
 
+                is_nsfw = bool(data.get("is_nsfw")) or (bool(image_meta.get("is_nsfw")) if image_meta else False)
+                media_type = data.get("media_type") or (image_meta.get("media_type") if image_meta else ("image" if image_meta else "text"))
+                media_duration = data.get("media_duration") or (image_meta.get("media_duration") if image_meta else None)
+                is_gif_mode = bool(data.get("is_gif_mode") or (image_meta.get("is_gif_mode") if image_meta else False))
+
                 dm_id = database.create_direct_message(
                     sender_id=user["id"],
                     receiver_id=receiver_id,
                     content=content,
-                    image_url=image_meta.get("image_url") if image_meta else None,
-                    image_name=image_meta.get("image_name") if image_meta else None,
-                    image_size_kb=image_meta.get("image_size_kb") if image_meta else None,
+                    image_url=image_meta.get("image_url") or image_meta.get("media_url") if image_meta else None,
+                    image_name=image_meta.get("image_name") or image_meta.get("media_name") if image_meta else None,
+                    image_size_kb=image_meta.get("image_size_kb") or image_meta.get("media_size_kb") if image_meta else None,
                     image_dims=image_meta.get("image_dims") if image_meta else None,
                     is_hd=bool(image_meta.get("is_hd")) if image_meta else False,
                     expires_at=image_meta.get("expires_at") if image_meta else None,
+                    is_nsfw=is_nsfw,
                     reply_to_id=int(reply_to_id) if reply_to_id else None,
+                    media_type=media_type,
+                    media_duration=media_duration,
+                    is_gif_mode=is_gif_mode,
                 )
                 await manager.send_dm_message(dm_id, user["id"], receiver_id)
                 await manager.send_to_user(receiver_id, {"type": "friends_updated"})

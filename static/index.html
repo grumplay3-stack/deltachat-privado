@@ -339,6 +339,8 @@
 
             <!-- VENTANA INTERNA DEL CHAT (CHATS A LA IZQUIERDA + ROSTER A LA DERECHA) -->
             <div class="xat-layout-wrap">
+              <!-- TELÓN OSCURO PARA ROSTER EN MÓVIL -->
+              <div id="xat-roster-backdrop" class="xat-roster-backdrop hidden"></div>
 
               <!-- PANEL IZQUIERDO: MENSAJES Y COMPOSITOR -->
               <div class="xat-chat-pane">
@@ -427,6 +429,7 @@
               <aside id="xat-roster-pane" class="xat-roster-pane">
                 <div class="xat-roster-header">
                   <span id="xat-roster-heading">Visitors (<span id="xat-online-count">0</span>)</span>
+                  <button type="button" id="btn-close-xat-roster" class="xat-roster-close-btn mobile-only" title="Cerrar lista">✕</button>
                 </div>
                 <div id="xat-roster-list" class="xat-roster-list">
                   <!-- Se renderizan los usuarios con sus pawns -->

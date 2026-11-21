@@ -2949,10 +2949,33 @@
 
     const btnToggleRoster = $("btn-toggle-xat-roster");
     const rosterPane = $("xat-roster-pane");
+    const rosterBackdrop = $("xat-roster-backdrop");
+    const btnCloseRoster = $("btn-close-xat-roster");
+
+    function setXatRosterDrawer(open) {
+      if (!rosterPane) return;
+      if (open) {
+        rosterPane.classList.add("open");
+        if (rosterBackdrop) rosterBackdrop.classList.remove("hidden");
+      } else {
+        rosterPane.classList.remove("open");
+        if (rosterBackdrop) rosterBackdrop.classList.add("hidden");
+      }
+    }
+
     if (btnToggleRoster && rosterPane) {
       btnToggleRoster.addEventListener("click", () => {
-        rosterPane.classList.toggle("open");
+        const isOpen = rosterPane.classList.contains("open");
+        setXatRosterDrawer(!isOpen);
       });
+    }
+
+    if (btnCloseRoster) {
+      btnCloseRoster.addEventListener("click", () => setXatRosterDrawer(false));
+    }
+
+    if (rosterBackdrop) {
+      rosterBackdrop.addEventListener("click", () => setXatRosterDrawer(false));
     }
 
     const btnMoreSmileys = $("btn-emoji-picker");

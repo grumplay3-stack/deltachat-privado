@@ -1380,22 +1380,6 @@ button {
   }
 }
 
-@media (max-width: 1120px) {
-  .xat-promo-card {
-    display: none;
-  }
-}
-
-@media (max-width: 850px) {
-  .xat-carousel-arrow {
-    display: none;
-  }
-  .xat-widget-container {
-    width: 100%;
-  }
-}
-}
-
 /* ==========================================================================
    ESTILOS XAT DARK (DARK THEME & CLASSIC XAT INTERFACE)
    ========================================================================== */
@@ -1613,6 +1597,7 @@ button {
   min-height: 380px;
   position: relative;
   background-color: var(--xat-bg-feed);
+  overflow: hidden;
 }
 
 .xat-chat-pane {
@@ -1701,7 +1686,8 @@ button {
 .xat-post-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px 6px;
   line-height: 1.2;
 }
 
@@ -2236,23 +2222,6 @@ button {
   transform: scale(1.18);
   background: #2a3447;
   border-color: #4a5568;
-}
-
-/* Responsive móvil para xat layout */
-@media (max-width: 768px) {
-  .xat-roster-pane {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 230px;
-    z-index: 45;
-    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.7);
-    display: none;
-  }
-  .xat-roster-pane.open {
-    display: flex;
-  }
 }
 
 /* ==========================================================================
@@ -2945,4 +2914,526 @@ button {
 
 .xat-footer-promoted span:hover {
   text-decoration: underline;
+}
+
+/* ==========================================================================
+   TELÓN Y BOTÓN CERRAR ROSTER MÓVIL
+   ========================================================================== */
+.xat-roster-backdrop {
+  display: none;
+}
+
+.xat-roster-close-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #94a3b8;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.xat-roster-close-btn:hover {
+  color: #ffffff;
+  border-color: #e53e3e;
+  background: rgba(229, 62, 62, 0.2);
+}
+
+/* ==========================================================================
+   ADAPTACIONES RESPONSIVE COMPLETAS: TABLET (<=1024px) Y MÓVIL (<=768px)
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  /* En tablets centramos el widget y ocultamos tarjeta lateral y flechas */
+  .xat-promo-card {
+    display: none !important;
+  }
+  .xat-carousel-arrow {
+    display: none !important;
+  }
+  .xat-stage-center {
+    width: 100% !important;
+    max-width: 740px !important;
+    margin: 0 auto !important;
+    justify-content: center !important;
+  }
+  .xat-widget-container {
+    width: 100% !important;
+    max-width: 740px !important;
+    flex: 1 1 auto !important;
+  }
+  .xat-layout-wrap {
+    height: 480px !important;
+  }
+  .xat-roster-pane {
+    width: 175px !important;
+    display: flex !important;
+    position: static !important;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Reset de ancho y espaciados principales */
+  .xat-chat-main {
+    padding: 2px 4px 10px 4px !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  .xat-stage-center {
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  .xat-widget-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 4px !important;
+    border-left: none !important;
+    border-right: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+
+  /* Ocultar elementos exclusivos de escritorio */
+  .desktop-only,
+  .xat-header-links,
+  .xat-meta-icons {
+    display: none !important;
+  }
+
+  /* Barra superior / Navbar compacto */
+  .top-nav.xat-top-navbar {
+    height: 44px !important;
+    padding: 0 6px !important;
+    gap: 4px !important;
+    overflow-x: hidden !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+  }
+
+  .top-nav.xat-top-navbar .nav-left {
+    gap: 6px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .top-nav.xat-top-navbar .nav-right {
+    gap: 3px !important;
+    flex-shrink: 1 !important;
+    min-width: 0 !important;
+    justify-content: flex-end !important;
+  }
+
+  .xat-sound-chip {
+    padding: 4px 6px !important;
+    font-size: 0 !important;
+    line-height: 1 !important;
+    flex-shrink: 0 !important;
+  }
+
+  .xat-sound-chip::before {
+    content: "🔔";
+    font-size: 13px !important;
+  }
+
+  .xat-user-chip {
+    padding: 3px 6px !important;
+    font-size: 11px !important;
+    max-width: 95px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex-shrink: 0 !important;
+  }
+
+  .xat-user-chip #my-alias-label {
+    max-width: 55px !important;
+    display: inline-block !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    vertical-align: middle !important;
+  }
+
+  .btn-admin {
+    padding: 3px 6px !important;
+    font-size: 0 !important;
+    line-height: 1 !important;
+    flex-shrink: 0 !important;
+  }
+
+  .btn-admin::before {
+    content: "⚙️ Admin";
+    font-size: 11px !important;
+    font-weight: 700 !important;
+  }
+
+  .xat-btn-register {
+    padding: 3px 6px !important;
+    font-size: 11px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Radio bar en móvil: 2 filas limpias */
+  .xat-radio-bar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 6px 8px !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    gap: 5px !important;
+  }
+
+  .xat-radio-left {
+    flex-shrink: 0 !important;
+    gap: 6px !important;
+  }
+
+  .xat-radio-actions {
+    flex-shrink: 0 !important;
+    gap: 4px !important;
+  }
+
+  .xat-vol-slider {
+    display: none !important; /* En móviles el volumen se controla con botones físicos */
+  }
+
+  .xat-radio-bar .search-wrap {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    margin-top: 2px !important;
+  }
+
+  .xat-radio-bar .search-wrap input {
+    flex: 1 !important;
+    min-width: 0 !important;
+    font-size: 12px !important;
+    padding: 4px 8px !important;
+    border-radius: 3px !important;
+  }
+
+  .xat-radio-bar .search-wrap .btn-chip {
+    flex-shrink: 0 !important;
+    padding: 4px 7px !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+
+  #btn-toggle-xat-roster {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+    background: #1e283d !important;
+    color: #63b3ed !important;
+    border-color: #2b3b5c !important;
+    font-weight: 600 !important;
+  }
+
+  /* Ventana del chat: altura responsive y flexible */
+  .xat-layout-wrap {
+    display: flex !important;
+    flex-direction: row !important;
+    position: relative !important;
+    height: calc(100dvh - 160px) !important;
+    min-height: 380px !important;
+    max-height: calc(100vh - 160px) !important;
+    width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  /* Panel de mensajes toma el 100% del ancho del chat */
+  .xat-chat-pane {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    background-color: var(--xat-bg-feed) !important;
+  }
+
+  .xat-messages-feed {
+    padding: 8px 6px !important;
+    gap: 6px !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+  }
+
+  /* Post de mensajes en móvil */
+  .post.xat-post {
+    padding: 5px 6px !important;
+    gap: 6px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .xat-post-avatar-col {
+    width: 28px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .xat-post-avatar-img {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  .xat-post-content-col {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    max-width: calc(100% - 34px) !important;
+    box-sizing: border-box !important;
+  }
+
+  .xat-post-header {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 2px 4px !important;
+    align-items: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .xat-post-author {
+    font-size: 12px !important;
+    max-width: 130px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .post-real-user {
+    font-size: 10px !important;
+    word-break: break-all !important;
+  }
+
+  .xat-post-time,
+  .xat-post-no {
+    font-size: 9.5px !important;
+    opacity: 0.75 !important; /* Siempre visible con baja opacidad en móvil ya que no hay hover con ratón */
+  }
+
+  .xat-post-actions {
+    opacity: 0.8 !important; /* Visible en móvil */
+    gap: 2px !important;
+  }
+
+  .post-text,
+  .post-content {
+    font-size: 13.5px !important;
+    line-height: 1.45 !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+    padding-top: 1px !important;
+  }
+
+  /* Roster de usuarios estilo cajón lateral (Drawer desplegable) */
+  .xat-roster-pane {
+    display: none !important;
+  }
+
+  .xat-roster-pane.open {
+    display: flex !important;
+    flex-direction: column !important;
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: min(250px, 80vw) !important;
+    z-index: 50 !important;
+    background-color: var(--xat-bg-roster) !important;
+    border-left: 1px solid var(--xat-border) !important;
+    box-shadow: -4px 0 25px rgba(0, 0, 0, 0.85) !important;
+    animation: xatDrawerSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  }
+
+  @keyframes xatDrawerSlide {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  .xat-roster-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 8px 10px !important;
+  }
+
+  .xat-roster-backdrop {
+    display: block !important;
+    position: absolute !important;
+    inset: 0 !important;
+    background: rgba(0, 0, 0, 0.65) !important;
+    z-index: 45 !important;
+    backdrop-filter: blur(2px) !important;
+    transition: opacity 0.2s ease !important;
+  }
+
+  .xat-roster-backdrop.hidden {
+    display: none !important;
+  }
+
+  /* Compositor en móvil */
+  .composer.xat-composer {
+    padding: 6px 8px !important;
+  }
+
+  .xat-composer-room-tag {
+    font-size: 10.5px !important;
+    padding: 1px 4px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .xat-smiley-bar-wrap {
+    padding: 2px 4px !important;
+    gap: 4px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .xat-smileys-ribbon {
+    gap: 4px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+
+  .xat-more-emojis-btn {
+    padding: 3px 7px !important;
+    font-size: 11px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .composer-controls.xat-composer-controls {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    width: 100% !important;
+  }
+
+  .xat-ctrl-btn {
+    padding: 6px 7px !important;
+    font-size: 14px !important;
+    flex-shrink: 0 !important;
+    min-width: 33px !important;
+    height: 36px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .xat-composer-controls textarea {
+    flex: 1 !important;
+    min-width: 0 !important;
+    font-size: 16px !important; /* Previene auto-zoom molesto en Safari iOS */
+    padding: 6px 8px !important;
+    min-height: 36px !important;
+    max-height: 75px !important;
+    box-sizing: border-box !important;
+  }
+
+  .xat-send-btn {
+    flex-shrink: 0 !important;
+    padding: 6px 13px !important;
+    font-size: 17px !important;
+    min-width: 40px !important;
+    height: 36px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* Popover de emojis dentro de los límites de la pantalla */
+  .emoji-popover.xat-palette-popover {
+    position: absolute !important;
+    bottom: 50px !important;
+    left: 4px !important;
+    right: 4px !important;
+    width: auto !important;
+    max-width: 96vw !important;
+    max-height: 220px !important;
+    z-index: 60 !important;
+  }
+
+  /* Tarjetas multimedia, encuestas y audio en móvil */
+  .post-media-grid {
+    max-width: 100% !important;
+  }
+
+  .post-media-grid img,
+  .post-media-grid video {
+    max-width: 100% !important;
+    max-height: 230px !important;
+    object-fit: contain !important;
+  }
+
+  .post-poll-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .voice-note-player {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .xat-embed-card {
+    max-width: 100% !important;
+  }
+
+  /* Modales en móvil */
+  .modal-dialog {
+    width: 94vw !important;
+    max-width: 94vw !important;
+    margin: 8px auto !important;
+    padding: 14px 12px !important;
+  }
+
+  .modal-dialog.modal-lg {
+    width: 96vw !important;
+    max-width: 96vw !important;
+  }
+
+  .xat-bottom-footer {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 8px 10px !important;
+    margin-top: 8px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .xat-composer-controls textarea {
+    padding: 5px 6px !important;
+    font-size: 15px !important;
+  }
+
+  .xat-ctrl-btn {
+    padding: 5px 5px !important;
+    font-size: 13px !important;
+    min-width: 30px !important;
+  }
+
+  .xat-send-btn {
+    padding: 5px 10px !important;
+    min-width: 36px !important;
+  }
 }

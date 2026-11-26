@@ -505,7 +505,9 @@
   });
 
   // --- BOOT CHAT ---
+  let bootRetryTimer = null;
   async function bootChat() {
+    clearTimeout(bootRetryTimer);
     try {
       const meResp = await apiFetch("/api/me");
       state.user = await meResp.json();
@@ -527,14 +529,28 @@
       }
 
       await Promise.all([loadChannels(), loadUsers(), loadSidebarSocial()]);
-      if (state.channels.length > 0) {
+
+      const savedMode = localStorage.getItem("dc_last_mode");
+      const savedTarget = parseInt(localStorage.getItem("dc_last_target_id") || "0", 10);
+      if (savedMode === "dm" && savedTarget && state.users.some((u) => u.id === savedTarget)) {
+        await selectDm(savedTarget);
+      } else if (savedMode === "channel" && savedTarget && state.channels.some((c) => c.id === savedTarget)) {
+        await selectChannel(savedTarget);
+      } else if (state.channels.length > 0) {
         await selectChannel(state.channels[0].id);
       }
 
       connectWebSocket();
       startHdCountdownLoop();
     } catch (err) {
-      forceLogout(err.message);
+      // Only forceLogout if token is invalid/banned (apiFetch already handles 401).
+      // On Render cold-start or network drop, keep session & retry automatically.
+      if (!state.token) return;
+      if (wsStatus) {
+        wsStatus.className = "conn-dot offline";
+        wsStatus.title = "Servidor despertando — reintentando conexión...";
+      }
+      bootRetryTimer = setTimeout(bootChat, 3000);
     }
   }
 
@@ -780,6 +796,8 @@
     state.activeChannelId = channelId;
     state.activeDmUserId = null;
     state.activeDmMeta = null;
+    localStorage.setItem("dc_last_mode", "channel");
+    localStorage.setItem("dc_last_target_id", String(channelId));
     clearReply();
     const ch = state.channels.find((c) => c.id === channelId);
     if (ch) {
@@ -799,6 +817,8 @@
     state.activeMode = "dm";
     state.activeDmUserId = friendId;
     state.activeChannelId = null;
+    localStorage.setItem("dc_last_mode", "dm");
+    localStorage.setItem("dc_last_target_id", String(friendId));
     clearReply();
     const friend = state.users.find((u) => u.id === friendId) || state.dmSummary.find((d) => d.user_id === friendId);
     if (friend) {
@@ -819,15 +839,39 @@
     const query = searchInput.value.trim();
     const qs = query ? `?search=${encodeURIComponent(query)}` : "";
     let url = "";
+    let cacheKey = "";
     if (state.activeMode === "channel" && state.activeChannelId) {
       url = `/api/messages/${state.activeChannelId}${qs}`;
+      cacheKey = `dc_msg_cache_channel_${state.activeChannelId}`;
     } else if (state.activeMode === "dm" && state.activeDmUserId) {
       url = `/api/dms/${state.activeDmUserId}${qs}`;
+      cacheKey = `dc_msg_cache_dm_${state.activeDmUserId}`;
     } else {
       return;
     }
-    const resp = await apiFetch(url);
-    const data = await resp.json();
+    let data;
+    try {
+      const resp = await apiFetch(url);
+      data = await resp.json();
+      if (!query && cacheKey) {
+        try {
+          const toCache = (data.messages || []).slice(-60);
+          localStorage.setItem(cacheKey, JSON.stringify({ messages: toCache, channel: data.channel || null }));
+        } catch {}
+      }
+    } catch (err) {
+      if (cacheKey && state.messages.length === 0) {
+        try {
+          const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+          if (cached && Array.isArray(cached.messages)) {
+            state.messages = cached.messages;
+            renderMessages();
+            return;
+          }
+        } catch {}
+      }
+      throw err;
+    }
     let msgs = data.messages || [];
     if (onlyMediaFilter) {
       msgs = msgs.filter((m) => Boolean(m.image_url));
@@ -1804,11 +1848,31 @@
   });
 
   // --- WEBSOCKET ---
+  let wsHasConnectedOnce = false;
+  let wsPingTimer = null;
+
+  async function syncAfterReconnect() {
+    if (!state.token) return;
+    try {
+      await Promise.all([
+        loadChannels().catch(() => {}),
+        loadUsers().catch(() => {}),
+        loadSidebarSocial().catch(() => {}),
+        fetchRadioState().catch(() => {}),
+      ]);
+      await loadCurrentMessages().catch(() => {});
+    } catch {}
+  }
+
   function connectWebSocket() {
     if (!state.token) return;
     if (state.ws) {
-      state.ws.close();
+      try {
+        state.ws.onclose = null;
+        state.ws.close();
+      } catch {}
     }
+    clearInterval(wsPingTimer);
     const proto = location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(state.token)}`);
     state.ws = ws;
@@ -1816,9 +1880,21 @@
     ws.onopen = () => {
       wsStatus.className = "conn-dot online";
       wsStatus.title = "Conectado en vivo";
+      if (wsHasConnectedOnce) {
+        syncAfterReconnect();
+      }
+      wsHasConnectedOnce = true;
+      wsPingTimer = setInterval(() => {
+        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+          try {
+            state.ws.send(JSON.stringify({ action: "ping" }));
+          } catch {}
+        }
+      }, 25000);
     };
 
     ws.onclose = () => {
+      clearInterval(wsPingTimer);
       wsStatus.className = "conn-dot offline";
       wsStatus.title = "Desconectado — reconectando...";
       if (state.token) {
@@ -2692,13 +2768,27 @@
     sidebarBackdrop.classList.add("hidden");
   }
 
-  $("btn-menu-toggle").addEventListener("click", () => {
-    const willOpen = !sidebar.classList.contains("open");
-    sidebar.classList.toggle("open", willOpen);
-    sidebarBackdrop.classList.toggle("hidden", !willOpen);
+  sidebarBackdrop.addEventListener("click", closeMobileSidebar);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.token) {
+      if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+        connectWebSocket();
+      } else {
+        syncAfterReconnect();
+      }
+    }
   });
 
-  sidebarBackdrop.addEventListener("click", closeMobileSidebar);
+  window.addEventListener("online", () => {
+    if (state.token) {
+      if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+        connectWebSocket();
+      } else {
+        syncAfterReconnect();
+      }
+    }
+  });
 
   $("btn-logout").addEventListener("click", async () => {
     try {
@@ -2880,12 +2970,15 @@
     const btnCloseSidebar = $("btn-close-sidebar");
 
     const toggleSidebar = () => {
-      const isMobile = window.innerWidth <= 768;
-      if (isMobile) {
+      const isDrawer = window.innerWidth <= 1024;
+      if (isDrawer) {
+        sidebar.classList.remove("collapsed");
         const willOpen = !sidebar.classList.contains("open");
         sidebar.classList.toggle("open", willOpen);
         sidebarBackdrop.classList.toggle("hidden", !willOpen);
       } else {
+        sidebar.classList.remove("open");
+        sidebarBackdrop.classList.add("hidden");
         sidebar.classList.toggle("collapsed");
       }
     };
@@ -2896,9 +2989,13 @@
 
     if (btnCloseSidebar) {
       btnCloseSidebar.addEventListener("click", () => {
-        sidebar.classList.remove("open");
-        sidebar.classList.add("collapsed");
-        sidebarBackdrop.classList.add("hidden");
+        if (window.innerWidth <= 1024) {
+          closeMobileSidebar();
+        } else {
+          sidebar.classList.remove("open");
+          sidebar.classList.add("collapsed");
+          sidebarBackdrop.classList.add("hidden");
+        }
       });
     }
 
@@ -2993,8 +3090,37 @@
     }
   }
 
-  // --- MULTIMEDIA, RADIO & POLLS CONTROLS ---
+  // --- MULTIMEDIA, RADIO (AUDIO + YOUTUBE) & POLLS CONTROLS ---
   let radioState = { title: "ConectFm", url: "", active: false };
+  let ytRadioPlaying = false;
+  let ytRadioMuted = false;
+  let ytRadioVideoId = null;
+
+  function extractYouTubeId(url) {
+    if (!url) return null;
+    const m = String(url).match(
+      /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|live\/|shorts\/|v\/)|youtu\.be\/|music\.youtube\.com\/watch\?(?:.*&)?v=)([a-zA-Z0-9_-]{11})/
+    );
+    return m ? m[1] : null;
+  }
+
+  function sendYouTubeCommand(func, args = []) {
+    const iframe = $("xat-radio-yt-iframe");
+    if (!iframe || !iframe.contentWindow) return;
+    try {
+      iframe.contentWindow.postMessage(
+        JSON.stringify({ event: "command", func, args }),
+        "*"
+      );
+    } catch {}
+  }
+
+  function stopYouTubeRadio() {
+    const host = $("xat-radio-yt-host");
+    if (host) host.innerHTML = "";
+    ytRadioPlaying = false;
+    ytRadioVideoId = null;
+  }
 
   async function fetchRadioState() {
     try {
@@ -3009,20 +3135,32 @@
   function updateRadioUI() {
     const titleEl = $("xat-radio-title");
     if (titleEl) titleEl.textContent = radioState.title || "ConectFm";
-    const footerRoom = $("xat-footer-room-name");
-    if (footerRoom) footerRoom.textContent = radioState.title || "ConectFm";
 
     const badge = $("xat-radio-badge");
     const audio = $("xat-radio-audio");
     const btnPlay = $("btn-radio-play");
+    const ytId = extractYouTubeId(radioState.url);
 
     if (radioState.active && radioState.url) {
       if (badge) {
-        badge.textContent = "LIVE";
+        badge.textContent = ytId ? "YT LIVE" : "LIVE";
         badge.className = "xat-radio-badge live";
       }
-      if (audio && audio.src !== radioState.url) {
-        audio.src = radioState.url;
+      if (ytId) {
+        if (audio) {
+          audio.pause();
+          audio.removeAttribute("src");
+        }
+        if (ytRadioVideoId && ytRadioVideoId !== ytId) {
+          const wasPlaying = ytRadioPlaying;
+          stopYouTubeRadio();
+          if (wasPlaying) startYouTubeRadio(ytId);
+        }
+      } else {
+        stopYouTubeRadio();
+        if (audio && audio.src !== radioState.url) {
+          audio.src = radioState.url;
+        }
       }
     } else {
       if (badge) {
@@ -3030,6 +3168,7 @@
         badge.className = "xat-radio-badge";
       }
       if (audio) audio.pause();
+      stopYouTubeRadio();
       if (btnPlay) btnPlay.textContent = "▶";
     }
 
@@ -3037,6 +3176,32 @@
     if (btnAdminRadio) {
       btnAdminRadio.classList.toggle("hidden", !(state.user && state.user.role === "admin"));
     }
+  }
+
+  function startYouTubeRadio(ytId) {
+    const host = $("xat-radio-yt-host");
+    if (!host || !ytId) return;
+    let iframe = $("xat-radio-yt-iframe");
+    if (!iframe || ytRadioVideoId !== ytId) {
+      ytRadioVideoId = ytId;
+      const originParam = location.origin && location.origin !== "null" ? `&origin=${encodeURIComponent(location.origin)}` : "";
+      host.innerHTML = `<iframe id="xat-radio-yt-iframe" src="https://www.youtube.com/embed/${ytId}?enablejsapi=1&autoplay=1&playsinline=1&loop=1&playlist=${ytId}${originParam}" allow="autoplay; encrypted-media" tabindex="-1"></iframe>`;
+      iframe = $("xat-radio-yt-iframe");
+      if (iframe) {
+        iframe.addEventListener("load", () => {
+          const volEl = $("radio-volume");
+          const volPct = volEl ? Math.round(parseFloat(volEl.value) * 100) : 70;
+          sendYouTubeCommand("setVolume", [volPct]);
+          if (ytRadioMuted) sendYouTubeCommand("mute");
+          if (ytRadioPlaying) sendYouTubeCommand("playVideo");
+        });
+      }
+    } else {
+      sendYouTubeCommand("playVideo");
+    }
+    ytRadioPlaying = true;
+    const btnPlay = $("btn-radio-play");
+    if (btnPlay) btnPlay.textContent = "⏸";
   }
 
   function initMultimediaAndRadio() {
@@ -3052,13 +3217,24 @@
       });
     }
 
-    // Radio stream controls
+    // Radio stream controls (Audio directo + YouTube)
     const btnRadioPlay = $("btn-radio-play");
     const radioAudio = $("xat-radio-audio");
     if (btnRadioPlay && radioAudio) {
       btnRadioPlay.addEventListener("click", () => {
         if (!radioState.url || !radioState.active) {
           alert("La radio no está transmitiendo en este momento.");
+          return;
+        }
+        const ytId = extractYouTubeId(radioState.url);
+        if (ytId) {
+          if (!ytRadioPlaying) {
+            startYouTubeRadio(ytId);
+          } else {
+            sendYouTubeCommand("pauseVideo");
+            ytRadioPlaying = false;
+            btnRadioPlay.textContent = "▶";
+          }
           return;
         }
         if (radioAudio.paused) {
@@ -3077,6 +3253,13 @@
     const btnRadioMute = $("btn-radio-mute");
     if (btnRadioMute && radioAudio) {
       btnRadioMute.addEventListener("click", () => {
+        const ytId = extractYouTubeId(radioState.url);
+        if (ytId) {
+          ytRadioMuted = !ytRadioMuted;
+          sendYouTubeCommand(ytRadioMuted ? "mute" : "unMute");
+          btnRadioMute.textContent = ytRadioMuted ? "🔇" : "🔊";
+          return;
+        }
         radioAudio.muted = !radioAudio.muted;
         btnRadioMute.textContent = radioAudio.muted ? "🔇" : "🔊";
       });
@@ -3085,7 +3268,11 @@
     const radioVol = $("radio-volume");
     if (radioVol && radioAudio) {
       radioVol.addEventListener("input", () => {
-        radioAudio.volume = parseFloat(radioVol.value);
+        const v = parseFloat(radioVol.value);
+        radioAudio.volume = v;
+        if (extractYouTubeId(radioState.url)) {
+          sendYouTubeCommand("setVolume", [Math.round(v * 100)]);
+        }
       });
     }
 

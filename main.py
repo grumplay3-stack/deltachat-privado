@@ -1244,6 +1244,10 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(default="")):
                 continue
 
             action = data.get("action")
+            if action == "ping":
+                await ws.send_json({"type": "pong"})
+                continue
+
             if action == "send_channel_message":
                 channel_id = int(data.get("channel_id") or 1)
                 content = (data.get("content") or "").strip()

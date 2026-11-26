@@ -202,9 +202,9 @@
     <header class="top-nav xat-top-navbar">
       <div class="nav-left">
         <button type="button" id="btn-menu-toggle" class="btn-icon" aria-label="Menú Tablones" title="Abrir Tablones">☰</button>
-        <div class="xat-logo-brand" id="brand-home-link" title="xat / DeltaChat">
+        <div class="xat-logo-brand" id="brand-home-link" title="DeltaChat">
           <span class="xat-planet-icon">🪐</span>
-          <span class="xat-brand-text">xat</span>
+          <span class="xat-brand-text">DeltaChat</span>
         </div>
         <nav class="xat-header-links desktop-only">
           <button type="button" id="btn-nav-grupos" class="xat-nav-btn" title="Explorar Grupos y Tablones">
@@ -300,6 +300,7 @@
                 <button type="button" id="btn-admin-radio" class="btn-radio-ctrl hidden" title="Ajustes de Radio (Admin)">⚙️</button>
               </div>
               <audio id="xat-radio-audio" preload="none"></audio>
+              <div id="xat-radio-yt-host" class="xat-radio-yt-host" aria-hidden="true"></div>
               <div class="search-wrap">
                 <input type="search" id="search-input" placeholder="Buscar texto o #fotos..." />
                 <button type="button" id="btn-filter-media" class="btn-chip" title="Ver solo fotos">📷 Fotos</button>
@@ -438,12 +439,12 @@
                   <button type="button" id="xat-tab-visitors" class="xat-tab-btn active" data-rtab="visitors">Visitors</button>
                   <button type="button" id="xat-tab-friends" class="xat-tab-btn" data-rtab="friends">Friends</button>
                 </div>
-                <!-- 4 MINI ICONOS ESTILO XAT: VISITANTES, AYUDA, PLANETA, LOGO -->
+                <!-- 4 MINI ICONOS: VISITANTES, AYUDA, PLANETA, CHAT -->
                 <div class="xat-roster-mini-icons">
                   <span class="xat-mini-icon" title="Visitantes">👥</span>
                   <span class="xat-mini-icon" title="Ayuda">❓</span>
                   <span class="xat-mini-icon" title="DeltaChat">🪐</span>
-                  <span class="xat-mini-icon xat-text-badge" title="xat">xat</span>
+                  <span class="xat-mini-icon" title="Chat">💬</span>
                 </div>
                 <div class="xat-roster-actions">
                   <button type="button" id="btn-xat-boards" class="xat-action-btn" title="Abrir lista de tablones">Get a Chat Box</button>
@@ -452,32 +453,26 @@
               </aside>
             </div>
 
-            <!-- PIE DE CHAT XAT CLÁSICO -->
+            <!-- PIE DE CHAT -->
             <div class="xat-bottom-footer">
               <div class="xat-footer-tagline">
-                <strong id="xat-footer-room-name">ConectFm</strong> <span class="footer-note">(Nota: Este chat no está dirigido por xat)</span>
-              </div>
-              <div class="xat-footer-promoted">
-                Grupos promocionados: <span>GOSS</span> | <span>ConectFm</span> | <span>ZONA_DE_KERENDONES</span> | <span>Inter_ritmo</span> | <span>LAMUSICAUNSENTIMIENTOYTU</span> | <span>RadioMexico</span> | <span>FREEDOM_IN_YOUR_SOUL</span> | <a href="#" id="link-promo-group" onclick="alert('DeltaChat: Puedes crear tu propio grupo desde el menú Grupos / Tablones'); return false;">Promocionar mi grupo</a>
+                <strong id="xat-footer-room-name">General</strong> · <span class="footer-note">DeltaChat en vivo</span>
               </div>
             </div>
 
           </div>
 
-          <!-- TARJETA LATERAL DERECHA "¿NUEVO EN XAT?" -->
+          <!-- TARJETA LATERAL DERECHA "¿NUEVO EN DELTACHAT?" -->
           <aside class="xat-promo-card desktop-only">
-            <h3 class="xat-promo-title">¿Nuevo en xat?</h3>
+            <h3 class="xat-promo-title">¿Nuevo en DeltaChat?</h3>
             <p class="xat-promo-desc">
-              Encuentra un grupo que comparta tus intereses. Crea tu propio grupo de xat. Obtén y comercializa Powers. Juega juegos multijugador. Diseña tu propio personaje de avatar animado. Envía stickers con tu texto personalizado.
+              Encuentra un grupo que comparta tus intereses. Crea tu propio grupo privado, comparte videos y notas de voz, vota en encuestas en vivo y escucha la radio de la sala en tiempo real.
             </p>
-            <button type="button" id="btn-promo-learn-more" class="btn-xat-learn-more" onclick="alert('DeltaChat Oscuro: Chatea en tiempo real con emojis 3D de xat, notas de voz ultraligeras, videos de 25MB y encuestas en vivo.');">
+            <button type="button" id="btn-promo-learn-more" class="btn-xat-learn-more" onclick="alert('DeltaChat Oscuro: Chatea en tiempo real con smileys 3D, notas de voz ultraligeras, videos de 25MB, radio con YouTube y encuestas en vivo.');">
               <span class="learn-icon">❓</span> aprende más
             </button>
             <div class="xat-promo-social">
-              <span>Sígue a xat en:</span>
-              <a href="#" class="social-link" title="X (Twitter)">𝕏</a>
-              <a href="#" class="social-link" title="Facebook">ⓕ</a>
-              <a href="#" class="social-link" title="Instagram">📷</a>
+              <span>DeltaChat Privado</span>
             </div>
           </aside>
 
@@ -825,8 +820,8 @@
           <input type="text" id="admin-radio-title-input" required maxlength="100" placeholder="ej. ConectFm / Delta Retro" value="ConectFm" />
         </label>
         <label>
-          URL del Stream de Audio en Vivo (MP3, AAC, Shoutcast, Icecast, etc.)
-          <input type="url" id="admin-radio-url-input" placeholder="https://stream.zeno.fm/... o URL directa de audio" />
+          Enlace de YouTube o Stream de Audio (YouTube, MP3, AAC, Icecast, etc.)
+          <input type="url" id="admin-radio-url-input" placeholder="https://www.youtube.com/watch?v=... o https://stream..." />
         </label>
         <label class="hd-toggle">
           <input type="checkbox" id="admin-radio-active-chk" checked />

@@ -2940,11 +2940,56 @@ button {
   background: rgba(229, 62, 62, 0.2);
 }
 
+.xat-radio-yt-host {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0.001;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: -1;
+}
+
+.xat-radio-yt-host iframe {
+  width: 1px;
+  height: 1px;
+  border: 0;
+}
+
 /* ==========================================================================
    ADAPTACIONES RESPONSIVE COMPLETAS: TABLET (<=1024px) Y MÓVIL (<=768px)
    ========================================================================== */
 
 @media (max-width: 1024px) {
+  /* En tablets y móviles el menú izquierdo funciona como cajón deslizable */
+  .sidebar,
+  .sidebar.collapsed {
+    position: fixed !important;
+    top: 44px !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 260px !important;
+    z-index: 70 !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.22s ease !important;
+    display: flex !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.75) !important;
+  }
+  .sidebar.open,
+  .sidebar.collapsed.open {
+    transform: translateX(0) !important;
+  }
+  .sidebar-backdrop {
+    position: fixed !important;
+    top: 44px !important;
+    inset-inline: 0 !important;
+    bottom: 0 !important;
+    background: rgba(0, 0, 0, 0.55) !important;
+    z-index: 65 !important;
+  }
+
   /* En tablets centramos el widget y ocultamos tarjeta lateral y flechas */
   .xat-promo-card {
     display: none !important;
@@ -3021,8 +3066,16 @@ button {
   }
 
   .top-nav.xat-top-navbar .nav-left {
-    gap: 6px !important;
+    gap: 5px !important;
     flex-shrink: 0 !important;
+  }
+
+  .xat-logo-brand {
+    gap: 4px !important;
+  }
+
+  .xat-logo-brand .xat-brand-text {
+    font-size: 14px !important;
   }
 
   .top-nav.xat-top-navbar .nav-right {
